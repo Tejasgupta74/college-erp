@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
-import { Bell, Clock, ArrowUpRight, CheckCheck, Megaphone } from 'lucide-react';
+import { Bell, Clock, ArrowUpRight, Megaphone } from 'lucide-react';
 
 export const NotificationDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -26,9 +26,7 @@ export const NotificationDropdown = () => {
   // Close when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);

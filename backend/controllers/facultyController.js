@@ -5,8 +5,7 @@ import Course from '../models/Course.js';
 export const getFaculty = async (req, res) => {
   try {
     const { department, search } = req.query;
-    const query = {};
-    if (department) query.department = department;
+    const query = department ? { department } : {};
 
     let profiles = await FacultyProfile.find(query)
       .populate('user', 'name email phone avatar isActive')
@@ -21,7 +20,6 @@ export const getFaculty = async (req, res) => {
         p.employeeId?.toLowerCase().includes(s)
       );
     }
-
     res.json({ success: true, count: profiles.length, data: profiles });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -30,16 +28,12 @@ export const getFaculty = async (req, res) => {
 
 export const getFacultyById = async (req, res) => {
   try {
-    const profile = await FacultyProfile.findOne({
-      $or: [{ _id: req.params.id }, { user: req.params.id }],
-    })
+    const profile = await FacultyProfile.findOne({ $or: [{ _id: req.params.id }, { user: req.params.id }] })
       .populate('user', 'name email phone avatar isActive')
       .populate('department', 'name code');
 
     if (!profile) return res.status(404).json({ success: false, message: 'Faculty profile not found' });
-
     const assignedCourses = await Course.find({ faculty: profile.user._id }).populate('department', 'name code');
-
     res.json({ success: true, data: { profile, assignedCourses } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -53,7 +47,6 @@ export const updateFaculty = async (req, res) => {
     if (!profile) return res.status(404).json({ success: false, message: 'Faculty not found' });
 
     if (name || phone) await User.findByIdAndUpdate(profile.user, { name, phone });
-
     if (designation) profile.designation = designation;
     if (qualification !== undefined) profile.qualification = qualification;
     if (specialization !== undefined) profile.specialization = specialization;
@@ -80,7 +73,6 @@ export const deleteFaculty = async (req, res) => {
       FacultyProfile.findByIdAndDelete(req.params.id),
       Course.updateMany({ faculty: profile.user }, { faculty: null }),
     ]);
-
     res.json({ success: true, message: 'Faculty member deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

@@ -17,15 +17,7 @@ export const getDashboardStats = async (req, res) => {
           FacultyProfile.countDocuments(),
           Department.countDocuments(),
           Course.countDocuments(),
-          Fee.aggregate([
-            {
-              $group: {
-                _id: null,
-                totalBilled: { $sum: '$totalAmount' },
-                totalCollected: { $sum: '$paidAmount' },
-              },
-            },
-          ]),
+          Fee.aggregate([{ $group: { _id: null, totalBilled: { $sum: '$totalAmount' }, totalCollected: { $sum: '$paidAmount' } } }]),
           Notice.find().sort({ createdAt: -1 }).limit(5).populate('author', 'name role'),
         ]);
 
@@ -36,15 +28,7 @@ export const getDashboardStats = async (req, res) => {
         success: true,
         data: {
           role: 'admin',
-          metrics: {
-            totalStudents,
-            totalFaculty,
-            totalDepartments,
-            totalCourses,
-            totalBilled,
-            totalCollected,
-            totalPending: totalBilled - totalCollected,
-          },
+          metrics: { totalStudents, totalFaculty, totalDepartments, totalCourses, totalBilled, totalCollected, totalPending: totalBilled - totalCollected },
           recentNotices,
         },
       });
@@ -63,9 +47,7 @@ export const getDashboardStats = async (req, res) => {
         data: {
           role: 'faculty',
           metrics: { assignedCoursesCount: assignedCourses.length, classesConducted },
-          assignedCourses,
-          recentAttendance,
-          recentNotices,
+          assignedCourses, recentAttendance, recentNotices,
         },
       });
     }
@@ -107,29 +89,19 @@ export const getDashboardStats = async (req, res) => {
 
     // Default: accountant
     const [feeData, pendingInvoices, paidInvoices] = await Promise.all([
-      Fee.aggregate([
-        {
-          $group: {
-            _id: null,
-            totalBilled: { $sum: '$totalAmount' },
-            totalCollected: { $sum: '$paidAmount' },
-          },
-        },
-      ]),
+      Fee.aggregate([{ $group: { _id: null, totalBilled: { $sum: '$totalAmount' }, totalCollected: { $sum: '$paidAmount' } } }]),
       Fee.countDocuments({ status: { $in: ['Pending', 'Partial'] } }),
       Fee.countDocuments({ status: 'Paid' }),
     ]);
+
+    const totalBilled = feeData[0]?.totalBilled || 0;
+    const totalCollected = feeData[0]?.totalCollected || 0;
 
     res.json({
       success: true,
       data: {
         role: 'accountant',
-        metrics: {
-          totalBilled: feeData[0]?.totalBilled || 0,
-          totalCollected: feeData[0]?.totalCollected || 0,
-          pendingInvoices,
-          paidInvoices,
-        },
+        metrics: { totalBilled, totalCollected, pendingInvoices, paidInvoices },
       },
     });
   } catch (error) {

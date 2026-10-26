@@ -89,7 +89,7 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     assert.ok(data.data.cache.hits >= 1);
   });
 
-  test('6. In-App Notifications API', async () => {
+  test('6. In-App Notifications API & Mark All As Read', async () => {
     const res = await fetch(`${BASE_URL}/notifications`, {
       headers: { Authorization: `Bearer ${adminToken}` },
     });
@@ -97,5 +97,13 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     const data = await res.json();
     assert.ok(data.success);
     assert.ok(Array.isArray(data.data));
+
+    const readAllRes = await fetch(`${BASE_URL}/notifications/read-all`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(readAllRes.status, 200);
+    const readAllData = await readAllRes.json();
+    assert.equal(readAllData.success, true);
   });
 });

@@ -1,16 +1,11 @@
-import { X, Printer, CheckCircle, GraduationCap } from 'lucide-react';
+import { X, Printer, GraduationCap } from 'lucide-react';
 
 export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
   if (!isOpen || !fee) return null;
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => window.print();
 
-  const latestPayment = fee.payments && fee.payments.length > 0
-    ? fee.payments[fee.payments.length - 1]
-    : null;
-
+  const latestPayment = fee.payments && fee.payments.length > 0 ? fee.payments[fee.payments.length - 1] : null;
   const receiptNo = latestPayment?.receiptNo || `REC-${fee._id?.slice(-6).toUpperCase()}`;
   const transactionId = latestPayment?.transactionId || `TXN-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
   const paymentDate = latestPayment?.date ? new Date(latestPayment.date).toLocaleDateString() : new Date().toLocaleDateString();
@@ -29,10 +24,7 @@ export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
             >
               <Printer className="w-3.5 h-3.5" /> Print Receipt
             </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200"
-            >
+            <button onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -89,15 +81,9 @@ export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 <tr>
-                  <td className="py-3 px-4 font-semibold text-slate-800">
-                    {fee.title}
-                  </td>
-                  <td className="py-3 px-4 text-right font-medium text-slate-600">
-                    ₹{fee.totalAmount?.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-right font-bold text-emerald-600">
-                    ₹{fee.paidAmount?.toLocaleString()}
-                  </td>
+                  <td className="py-3 px-4 font-semibold text-slate-800">{fee.title}</td>
+                  <td className="py-3 px-4 text-right font-medium text-slate-600">₹{fee.totalAmount?.toLocaleString()}</td>
+                  <td className="py-3 px-4 text-right font-bold text-emerald-600">₹{fee.paidAmount?.toLocaleString()}</td>
                 </tr>
               </tbody>
             </table>
@@ -115,9 +101,7 @@ export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
             </div>
             <div className="text-right">
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Settled Now</span>
-              <span className="font-extrabold text-lg text-indigo-700">
-                ₹{fee.paidAmount?.toLocaleString()}
-              </span>
+              <span className="font-extrabold text-lg text-indigo-700">₹{fee.paidAmount?.toLocaleString()}</span>
             </div>
           </div>
 
@@ -128,9 +112,7 @@ export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
               <p className="text-[10px]">No physical signature required for institutional verification.</p>
             </div>
             <div className="text-center">
-              <div className="w-28 border-b border-slate-300 pb-1 mb-1 font-serif text-slate-700 italic font-bold">
-                Finance Officer
-              </div>
+              <div className="w-28 border-b border-slate-300 pb-1 mb-1 font-serif text-slate-700 italic font-bold">Finance Officer</div>
               <span className="text-[10px] font-semibold text-slate-400 uppercase">Accounts Section</span>
             </div>
           </div>

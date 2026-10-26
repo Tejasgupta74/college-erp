@@ -1,8 +1,8 @@
 import Exam from '../models/Exam.js';
-import Course from '../models/Course.js';
 
-// Grade calculation helper
+// Grade calculation helper with division-by-zero protection
 const calculateGrade = (marksObtained, maxMarks) => {
+  if (!maxMarks || maxMarks <= 0) return 'F';
   const percentage = (marksObtained / maxMarks) * 100;
   if (percentage >= 90) return 'A+';
   if (percentage >= 80) return 'A';
@@ -41,15 +41,7 @@ export const createExam = async (req, res) => {
     } = req.body;
 
     const exam = await Exam.create({
-      title,
-      course: courseId,
-      department: departmentId,
-      semester,
-      examType,
-      maxMarks,
-      passingMarks,
-      examDate,
-      results: [],
+      title, course: courseId, department: departmentId, semester, examType, maxMarks, passingMarks, examDate, results: [],
     });
 
     const populated = await Exam.findById(exam._id)
@@ -64,11 +56,11 @@ export const createExam = async (req, res) => {
 
 export const recordMarks = async (req, res) => {
   try {
-    const { results } = req.body; // array of { studentId, marksObtained, remarks }
+    const { results } = req.body;
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
 
-    exam.results = results.map((r) => ({
+    exam.results = (results || []).map((r) => ({
       student: r.studentId,
       marksObtained: Number(r.marksObtained),
       grade: calculateGrade(Number(r.marksObtained), exam.maxMarks),
@@ -91,13 +83,15 @@ export const recordMarks = async (req, res) => {
 export const getStudentReportCard = async (req, res) => {
   try {
     const studentId = (req.params.studentId || req.user._id).toString();
-
     const exams = await Exam.find({ 'results.student': studentId })
       .populate('course', 'name code credits')
       .populate('department', 'name code');
 
     const reportCard = exams.map((exam) => {
       const r = exam.results.find((result) => result.student.toString() === studentId);
+      const marksObtained = r ? r.marksObtained : 0;
+      const percentage = r && exam.maxMarks > 0 ? ((marksObtained / exam.maxMarks) * 100).toFixed(1) : '0.0';
+
       return {
         examId: exam._id,
         examTitle: exam.title,
@@ -106,10 +100,10 @@ export const getStudentReportCard = async (req, res) => {
         courseCode: exam.course?.code,
         credits: exam.course?.credits || 3,
         maxMarks: exam.maxMarks,
-        marksObtained: r ? r.marksObtained : 0,
-        percentage: r ? ((r.marksObtained / exam.maxMarks) * 100).toFixed(1) : '0.0',
+        marksObtained,
+        percentage,
         grade: r ? r.grade : 'F',
-        isPassed: r ? r.marksObtained >= exam.passingMarks : false,
+        isPassed: r ? marksObtained >= exam.passingMarks : false,
       };
     });
 

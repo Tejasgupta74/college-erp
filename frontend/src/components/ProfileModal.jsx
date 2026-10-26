@@ -1,20 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
-import {
-  X,
-  User,
-  Lock,
-  Mail,
-  Phone,
-  Building2,
-  GraduationCap,
-  Calendar,
-  CheckCircle,
-  AlertCircle,
-  Shield,
-  KeyRound
-} from 'lucide-react';
+import { X, User, Lock, Mail, Phone, Building2, GraduationCap, CheckCircle, AlertCircle, Shield, KeyRound } from 'lucide-react';
 
 export const ProfileModal = ({ isOpen, onClose }) => {
   const { user } = useAuth();

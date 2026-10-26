@@ -1,20 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
-import {
-  X,
-  Mail,
-  Phone,
-  Building2,
-  CalendarCheck2,
-  CreditCard,
-  Award,
-  MapPin,
-  Heart,
-  Calendar,
-  AlertTriangle,
-  CheckCircle2,
-  BookOpen
-} from 'lucide-react';
+import { X, Mail, Phone, CalendarCheck2, CreditCard, MapPin, BookOpen } from 'lucide-react';
 
 export const StudentDossierModal = ({ isOpen, onClose, studentId }) => {
   const [data, setData] = useState(null);
@@ -22,7 +8,6 @@ export const StudentDossierModal = ({ isOpen, onClose, studentId }) => {
 
   useEffect(() => {
     if (!isOpen || !studentId) return;
-
     const fetchDetails = async () => {
       setLoading(true);
       try {
@@ -34,7 +19,6 @@ export const StudentDossierModal = ({ isOpen, onClose, studentId }) => {
         setLoading(false);
       }
     };
-
     fetchDetails();
   }, [isOpen, studentId]);
 
@@ -96,7 +80,6 @@ export const StudentDossierModal = ({ isOpen, onClose, studentId }) => {
             <>
               {/* Core Academic KPI Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Attendance */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Attendance Rate</span>
@@ -112,7 +95,6 @@ export const StudentDossierModal = ({ isOpen, onClose, studentId }) => {
                   </div>
                 </div>
 
-                {/* Fee Status */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Fee Balance</span>
@@ -128,7 +110,6 @@ export const StudentDossierModal = ({ isOpen, onClose, studentId }) => {
                   </div>
                 </div>
 
-                {/* Batch & Program */}
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Academic Cohort</span>

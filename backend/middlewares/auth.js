@@ -10,8 +10,7 @@ export const protect = async (req, res, next) => {
       if (!req.user) return res.status(401).json({ success: false, message: 'User not found with this token' });
       if (!req.user.isActive) return res.status(403).json({ success: false, message: 'Account is deactivated' });
       return next();
-    } catch (error) {
-      console.error('[Auth Error]', error.message);
+    } catch {
       return res.status(401).json({ success: false, message: 'Not authorized, token invalid or expired' });
     }
   }
@@ -21,10 +20,7 @@ export const protect = async (req, res, next) => {
 export const authorize = (...roles) => (req, res, next) => {
   if (!req.user) return res.status(401).json({ success: false, message: 'Not authorized' });
   if (!roles.includes(req.user.role)) {
-    return res.status(403).json({
-      success: false,
-      message: `Role '${req.user.role}' is not authorized to access this resource`,
-    });
+    return res.status(403).json({ success: false, message: `Role '${req.user.role}' is not authorized to access this resource` });
   }
   next();
 };

@@ -25,7 +25,6 @@ export const getStudents = async (req, res) => {
         p.enrollmentNo?.toLowerCase().includes(s)
       );
     }
-
     res.json({ success: true, count: profiles.length, data: profiles });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -34,20 +33,19 @@ export const getStudents = async (req, res) => {
 
 export const getStudentById = async (req, res) => {
   try {
-    const profile = await StudentProfile.findOne({
-      $or: [{ _id: req.params.id }, { user: req.params.id }],
-    })
+    const profile = await StudentProfile.findOne({ $or: [{ _id: req.params.id }, { user: req.params.id }] })
       .populate('user', 'name email phone avatar isActive')
       .populate('department', 'name code');
 
     if (!profile) return res.status(404).json({ success: false, message: 'Student profile not found' });
-
     const studentUserId = profile.user._id.toString();
 
-    // Fetch student's attendance summary
-    const attendances = await Attendance.find({
-      'records.student': studentUserId,
-    }).populate('course', 'name code');
+    // Fetch student's attendance summary, fees, and exams concurrently
+    const [attendances, fees, exams] = await Promise.all([
+      Attendance.find({ 'records.student': studentUserId }).populate('course', 'name code'),
+      Fee.find({ student: studentUserId }).sort({ createdAt: -1 }),
+      Exam.find({ 'results.student': studentUserId }).populate('course', 'name code'),
+    ]);
 
     const totalClasses = attendances.length;
     let presentClasses = 0;
@@ -56,12 +54,6 @@ export const getStudentById = async (req, res) => {
       if (rec && (rec.status === 'Present' || rec.status === 'Late')) presentClasses++;
     });
     const attendancePercentage = totalClasses > 0 ? ((presentClasses / totalClasses) * 100).toFixed(1) : 100;
-
-    // Fetch fee status & exam results
-    const [fees, exams] = await Promise.all([
-      Fee.find({ student: studentUserId }).sort({ createdAt: -1 }),
-      Exam.find({ 'results.student': studentUserId }).populate('course', 'name code'),
-    ]);
 
     const examResults = exams.map((exam) => {
       const r = exam.results.find((result) => result.student.toString() === studentUserId);
@@ -96,7 +88,6 @@ export const updateStudentProfile = async (req, res) => {
     if (!profile) return res.status(404).json({ success: false, message: 'Student not found' });
 
     if (name || phone) await User.findByIdAndUpdate(profile.user, { name, phone });
-
     if (semester) profile.semester = semester;
     if (section) profile.section = section;
     if (batchYear) profile.batchYear = batchYear;
@@ -124,7 +115,6 @@ export const deleteStudent = async (req, res) => {
       User.findByIdAndDelete(profile.user),
       StudentProfile.findByIdAndDelete(req.params.id),
     ]);
-
     res.json({ success: true, message: 'Student deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

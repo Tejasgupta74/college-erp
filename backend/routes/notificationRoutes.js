@@ -3,26 +3,26 @@ import Notification from '../models/Notification.js';
 import { protect } from '../middlewares/auth.js';
 
 const router = express.Router();
-
 router.use(protect);
 
 // GET /api/notifications
 router.get('/', async (req, res) => {
   try {
-    const notifications = await Notification.find({ recipient: req.user._id })
-      .sort({ createdAt: -1 })
-      .limit(20);
+    const [notifications, unreadCount] = await Promise.all([
+      Notification.find({ recipient: req.user._id }).sort({ createdAt: -1 }).limit(20),
+      Notification.countDocuments({ recipient: req.user._id, isRead: false }),
+    ]);
+    res.json({ success: true, unreadCount, data: notifications });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
-    const unreadCount = await Notification.countDocuments({
-      recipient: req.user._id,
-      isRead: false,
-    });
-
-    res.json({
-      success: true,
-      unreadCount,
-      data: notifications,
-    });
+// PUT /api/notifications/read-all (Must be defined before /:id/read)
+router.put('/read-all', async (req, res) => {
+  try {
+    await Notification.updateMany({ recipient: req.user._id, isRead: false }, { isRead: true, readAt: new Date() });
+    res.json({ success: true, message: 'All notifications marked as read' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -36,26 +36,8 @@ router.put('/:id/read', async (req, res) => {
       { isRead: true, readAt: new Date() },
       { new: true }
     );
-
-    if (!notification) {
-      return res.status(404).json({ success: false, message: 'Notification not found' });
-    }
-
+    if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
     res.json({ success: true, data: notification });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// PUT /api/notifications/read-all
-router.put('/read-all', async (req, res) => {
-  try {
-    await Notification.updateMany(
-      { recipient: req.user._id, isRead: false },
-      { isRead: true, readAt: new Date() }
-    );
-
-    res.json({ success: true, message: 'All notifications marked as read' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

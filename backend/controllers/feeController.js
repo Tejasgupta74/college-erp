@@ -28,18 +28,9 @@ export const getFees = async (req, res) => {
 export const createFeeInvoice = async (req, res) => {
   try {
     const { studentId, departmentId, title, semester, academicYear, totalAmount, dueDate } = req.body;
-
     const invoice = await Fee.create({
-      student: studentId,
-      department: departmentId,
-      title,
-      semester,
-      academicYear,
-      totalAmount,
-      dueDate,
-      status: 'Pending',
-      paidAmount: 0,
-      payments: [],
+      student: studentId, department: departmentId, title, semester, academicYear, totalAmount, dueDate,
+      status: 'Pending', paidAmount: 0, payments: [],
     });
 
     const populated = await Fee.findById(invoice._id)
@@ -62,9 +53,7 @@ export const recordPayment = async (req, res) => {
     if (!fee) return res.status(404).json({ success: false, message: 'Fee invoice not found' });
 
     const payAmount = Number(amount);
-    if (isNaN(payAmount) || payAmount <= 0) {
-      return res.status(400).json({ success: false, message: 'Invalid payment amount' });
-    }
+    if (isNaN(payAmount) || payAmount <= 0) return res.status(400).json({ success: false, message: 'Invalid payment amount' });
 
     const receiptNo = `REC-${Date.now().toString().slice(-6)}`;
     const transactionId = `TXN-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
@@ -73,7 +62,6 @@ export const recordPayment = async (req, res) => {
     fee.payments.push({ amount: payAmount, transactionId, method, date: paymentDate, receiptNo });
     fee.paidAmount += payAmount;
     fee.status = fee.paidAmount >= fee.totalAmount ? 'Paid' : fee.paidAmount > 0 ? 'Partial' : 'Pending';
-
     await fee.save();
 
     const updated = await Fee.findById(fee._id)

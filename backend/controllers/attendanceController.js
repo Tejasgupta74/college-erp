@@ -16,19 +16,12 @@ const getDayRange = (date) => {
 export const markAttendance = async (req, res) => {
   try {
     const { courseId, departmentId, date, semester = 1, section = 'A', topicCovered = '', records } = req.body;
-
     if (!courseId || !departmentId || !Array.isArray(records)) {
       return res.status(400).json({ success: false, message: 'Please provide course, department, and student records' });
     }
 
     const { sessionDate, startOfDay, endOfDay } = getDayRange(date);
-
-    // Check if attendance already marked today for this course & section
-    let attendance = await Attendance.findOne({
-      course: courseId,
-      section,
-      date: { $gte: startOfDay, $lte: endOfDay },
-    });
+    let attendance = await Attendance.findOne({ course: courseId, section, date: { $gte: startOfDay, $lte: endOfDay } });
 
     if (attendance) {
       attendance.records = records;
@@ -37,14 +30,8 @@ export const markAttendance = async (req, res) => {
       await attendance.save();
     } else {
       attendance = await Attendance.create({
-        course: courseId,
-        department: departmentId,
-        faculty: req.user._id,
-        date: sessionDate,
-        semester,
-        section,
-        topicCovered,
-        records,
+        course: courseId, department: departmentId, faculty: req.user._id,
+        date: sessionDate, semester, section, topicCovered, records,
       });
     }
 
@@ -65,7 +52,6 @@ export const getAttendance = async (req, res) => {
   try {
     const { courseId, date, semester, section } = req.query;
     const query = {};
-
     if (courseId) query.course = courseId;
     if (semester) query.semester = Number(semester);
     if (section) query.section = section;
@@ -92,15 +78,9 @@ export const getAttendance = async (req, res) => {
 export const getStudentAttendanceSummary = async (req, res) => {
   try {
     const studentUserId = (req.params.studentId || req.user._id).toString();
+    const sessions = await Attendance.find({ 'records.student': studentUserId }).populate('course', 'name code credits');
 
-    // Fetch all attendance sessions where this student has a record
-    const sessions = await Attendance.find({
-      'records.student': studentUserId,
-    }).populate('course', 'name code credits');
-
-    // Aggregate by course
     const courseStats = {};
-
     sessions.forEach((session) => {
       const courseId = session.course?._id?.toString() || 'unknown';
       if (!courseStats[courseId]) {
@@ -114,7 +94,6 @@ export const getStudentAttendanceSummary = async (req, res) => {
           percentage: 0,
         };
       }
-
       courseStats[courseId].total++;
       const rec = session.records.find((r) => r.student.toString() === studentUserId);
       if (rec && (rec.status === 'Present' || rec.status === 'Late')) {
@@ -126,7 +105,6 @@ export const getStudentAttendanceSummary = async (req, res) => {
 
     let overallTotal = 0;
     let overallPresent = 0;
-
     const breakdown = Object.values(courseStats).map((item) => {
       overallTotal += item.total;
       overallPresent += item.present;
@@ -135,7 +113,6 @@ export const getStudentAttendanceSummary = async (req, res) => {
     });
 
     const overallPercentage = overallTotal > 0 ? Number(((overallPresent / overallTotal) * 100).toFixed(1)) : 100;
-
     res.json({
       success: true,
       data: {

@@ -4,16 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import NotificationDropdown from './NotificationDropdown';
 import ProfileModal from './ProfileModal';
 import CommandSearch from './CommandSearch';
-import {
-  Search,
-  Calendar,
-  Menu,
-  User,
-  KeyRound,
-  LogOut,
-  ChevronDown,
-  Sparkles
-} from 'lucide-react';
+import { Search, Calendar, Menu, User, KeyRound, LogOut, ChevronDown } from 'lucide-react';
 
 export const Navbar = ({ onToggleSidebar }) => {
   const { user, logout } = useAuth();
@@ -43,9 +34,7 @@ export const Navbar = ({ onToggleSidebar }) => {
   // Close profile dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setShowProfileMenu(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target)) setShowProfileMenu(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -90,7 +79,6 @@ export const Navbar = ({ onToggleSidebar }) => {
             <span>{currentDate}</span>
           </div>
 
-          {/* Interactive Notifications */}
           <NotificationDropdown />
 
           {/* User Profile Dropdown */}
@@ -118,10 +106,7 @@ export const Navbar = ({ onToggleSidebar }) => {
 
                 <div className="py-1">
                   <button
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      setShowProfileModal(true);
-                    }}
+                    onClick={() => { setShowProfileMenu(false); setShowProfileModal(true); }}
                     className="w-full px-4 py-2 text-left font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors"
                   >
                     <User className="w-4 h-4 text-slate-400" />
@@ -129,10 +114,7 @@ export const Navbar = ({ onToggleSidebar }) => {
                   </button>
 
                   <button
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      setShowProfileModal(true);
-                    }}
+                    onClick={() => { setShowProfileMenu(false); setShowProfileModal(true); }}
                     className="w-full px-4 py-2 text-left font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors"
                   >
                     <KeyRound className="w-4 h-4 text-slate-400" />

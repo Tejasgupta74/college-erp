@@ -41,7 +41,7 @@ export const Fees = () => {
   const fetchFees = async () => {
     try {
       let url = '/fees?';
-      if (isStudent) url += `studentId=${user._id}&`;
+      if (isStudent && user?._id) url += `studentId=${user._id}&`;
       if (statusFilter) url += `status=${statusFilter}&`;
 
       const [feeRes, deptRes, stRes] = await Promise.all([
@@ -62,7 +62,7 @@ export const Fees = () => {
 
   useEffect(() => {
     fetchFees();
-  }, [statusFilter]);
+  }, [statusFilter, user]);
 
   useEffect(() => {
     if (!statusMsg.text) return;

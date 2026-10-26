@@ -1,22 +1,11 @@
-import { X, Printer, GraduationCap, Award, CheckCircle } from 'lucide-react';
+import { X, Printer, GraduationCap } from 'lucide-react';
 
 export const TranscriptModal = ({ isOpen, onClose, reportCard, studentProfile, userName }) => {
   if (!isOpen || !reportCard) return null;
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => window.print();
 
-  // Compute SGPA and credits
-  const gradePointsMap = {
-    'A+': 10,
-    'A': 9,
-    'B': 8,
-    'C': 7,
-    'D': 6,
-    'P': 5,
-    'F': 0,
-  };
+  const gradePointsMap = { 'A+': 10, 'A': 9, 'B': 8, 'C': 7, 'D': 6, 'P': 5, 'F': 0 };
 
   let totalCredits = 0;
   let earnedCredits = 0;
@@ -45,10 +34,7 @@ export const TranscriptModal = ({ isOpen, onClose, reportCard, studentProfile, u
             >
               <Printer className="w-3.5 h-3.5" /> Print Transcript
             </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200"
-            >
+            <button onClick={onClose} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-200">
               <X className="w-4 h-4" />
             </button>
           </div>
