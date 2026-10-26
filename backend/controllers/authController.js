@@ -64,26 +64,36 @@ export const createUser = async (req, res) => {
       guardianName = '', guardianPhone = '', employeeId, designation = 'Assistant Professor', qualification = 'Post Graduate',
     } = req.body;
 
+    if (!name || !email || !role) return res.status(400).json({ success: false, message: 'Please provide name, email, and role' });
+    if ((role === 'student' || role === 'faculty') && !departmentId) {
+      return res.status(400).json({ success: false, message: 'Please select a department' });
+    }
+
     if (await User.findOne({ email })) return res.status(400).json({ success: false, message: 'User with this email already exists' });
 
     const user = await User.create({ name, email, password: password || 'College@123', role, phone });
     let profile = null;
 
-    if (role === 'student') {
-      profile = await StudentProfile.create({
-        user: user._id,
-        enrollmentNo: enrollmentNo || `ENR${Date.now().toString().slice(-6)}`,
-        rollNo: rollNo || `R${Date.now().toString().slice(-4)}`,
-        department: departmentId,
-        semester, section, batchYear, guardianName, guardianPhone,
-      });
-    } else if (role === 'faculty') {
-      profile = await FacultyProfile.create({
-        user: user._id,
-        employeeId: employeeId || `EMP${Date.now().toString().slice(-5)}`,
-        department: departmentId,
-        designation, qualification,
-      });
+    try {
+      if (role === 'student') {
+        profile = await StudentProfile.create({
+          user: user._id,
+          enrollmentNo: enrollmentNo || `ENR${Date.now().toString().slice(-6)}`,
+          rollNo: rollNo || `R${Date.now().toString().slice(-4)}`,
+          department: departmentId,
+          semester, section, batchYear, guardianName, guardianPhone,
+        });
+      } else if (role === 'faculty') {
+        profile = await FacultyProfile.create({
+          user: user._id,
+          employeeId: employeeId || `EMP${Date.now().toString().slice(-5)}`,
+          department: departmentId,
+          designation, qualification,
+        });
+      }
+    } catch (profileErr) {
+      await User.findByIdAndDelete(user._id);
+      throw profileErr;
     }
 
     res.status(201).json({

@@ -28,7 +28,7 @@ class CacheEngine {
 
   delPattern(pattern) {
     let count = 0;
-    const regex = new RegExp(`^${pattern.replace('*', '.*')}`);
+    const regex = new RegExp(`^${pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}`);
     for (const key of this.store.keys()) {
       if (regex.test(key)) { this.del(key); count++; }
     }

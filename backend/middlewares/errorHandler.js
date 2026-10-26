@@ -12,8 +12,8 @@ export const errorHandler = (err, req, res, next) => {
   let message = err.message || 'An unexpected server error occurred';
   let details = err.details || null;
 
-  // Handle Mongoose Bad ObjectId (CastError)
-  if (err.name === 'CastError' && err.kind === 'ObjectId') {
+  // Handle Mongoose Bad Identifier (CastError)
+  if (err.name === 'CastError') {
     statusCode = 404;
     code = 'RESOURCE_NOT_FOUND';
     message = 'Requested resource identifier does not exist';

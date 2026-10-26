@@ -119,15 +119,15 @@ export const Attendance = () => {
     try {
       await api.post('/attendance', {
         courseId: selectedCourse,
-        departmentId: courseObj.department?._id || courseObj.department,
-        semester: courseObj.semester,
+        departmentId: courseObj?.department?._id || courseObj?.department,
+        semester: courseObj?.semester,
         section: 'A',
         date: attendanceDate,
         topicCovered,
         records: recordPayload,
       });
 
-      setStatusMsg({ type: 'success', text: `Attendance for ${courseObj.name} recorded successfully!` });
+      setStatusMsg({ type: 'success', text: `Attendance for ${courseObj?.name || 'course'} recorded successfully!` });
     } catch (err) {
       setStatusMsg({ type: 'error', text: err.response?.data?.message || 'Failed to submit attendance' });
     }

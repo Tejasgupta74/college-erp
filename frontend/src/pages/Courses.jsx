@@ -62,7 +62,9 @@ export const Courses = () => {
   const handleCreateCourse = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/academics/courses', formData);
+      const payload = { ...formData };
+      if (!payload.faculty) delete payload.faculty;
+      await api.post('/academics/courses', payload);
       setStatusMsg({ type: 'success', text: 'Course added successfully' });
       setShowModal(false);
       setFormData(initialCourseForm);

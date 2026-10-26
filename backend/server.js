@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 import connectDB from './config/db.js';
 import logger from './config/logger.js';
@@ -28,6 +29,7 @@ import metricsRoutes from './routes/metricsRoutes.js';
 dotenv.config();
 connectDB();
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -40,7 +42,7 @@ app.use(requestIdMiddleware);
 if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
 
 // Static files & rate limiting
-app.use('/uploads', express.static(path.resolve('uploads'), { maxAge: '7d' }));
+app.use('/uploads', express.static(path.resolve(__dirname, 'uploads'), { maxAge: '7d' }));
 app.use('/api', apiLimiter);
 
 // Health check endpoint

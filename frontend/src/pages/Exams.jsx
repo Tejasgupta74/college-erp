@@ -96,7 +96,7 @@ export const Exams = () => {
       // Merge with existing exam results if already recorded
       const entries = studentList.map((st) => {
         const existingResult = exam.results?.find(
-          (r) => (r.student?._id || r.student) === st.user?._id
+          (r) => (r.student?._id || r.student)?.toString() === st.user?._id?.toString()
         );
         return {
           studentId: st.user?._id,

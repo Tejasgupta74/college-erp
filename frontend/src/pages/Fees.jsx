@@ -353,7 +353,7 @@ export const Fees = () => {
                   required
                   value={invoiceData.studentId}
                   onChange={(e) => {
-                    const st = students.find((s) => s.user?._id === e.target.value);
+                    const st = students.find((s) => (s.user?._id || s.user)?.toString() === e.target.value?.toString());
                     setInvoiceData({
                       ...invoiceData,
                       studentId: e.target.value,

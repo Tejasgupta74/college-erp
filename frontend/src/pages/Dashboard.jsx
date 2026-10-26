@@ -23,6 +23,7 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) return;
     const fetchStats = async () => {
       try {
         const res = await api.get('/dashboard/stats');
@@ -34,7 +35,7 @@ export const Dashboard = () => {
       }
     };
     fetchStats();
-  }, []);
+  }, [user]);
 
   if (loading) {
     return (

@@ -33,7 +33,8 @@ export const getFacultyById = async (req, res) => {
       .populate('department', 'name code');
 
     if (!profile) return res.status(404).json({ success: false, message: 'Faculty profile not found' });
-    const assignedCourses = await Course.find({ faculty: profile.user._id }).populate('department', 'name code');
+    const facultyUserId = profile.user?._id || profile.user;
+    const assignedCourses = facultyUserId ? await Course.find({ faculty: facultyUserId }).populate('department', 'name code') : [];
     res.json({ success: true, data: { profile, assignedCourses } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -46,7 +47,13 @@ export const updateFaculty = async (req, res) => {
     const profile = await FacultyProfile.findById(req.params.id);
     if (!profile) return res.status(404).json({ success: false, message: 'Faculty not found' });
 
-    if (name || phone) await User.findByIdAndUpdate(profile.user, { name, phone });
+    const userUpdate = {};
+    if (name) userUpdate.name = name;
+    if (phone !== undefined) userUpdate.phone = phone;
+    if (Object.keys(userUpdate).length > 0 && profile.user) {
+      await User.findByIdAndUpdate(profile.user, userUpdate);
+    }
+
     if (designation) profile.designation = designation;
     if (qualification !== undefined) profile.qualification = qualification;
     if (specialization !== undefined) profile.specialization = specialization;
@@ -69,9 +76,9 @@ export const deleteFaculty = async (req, res) => {
     if (!profile) return res.status(404).json({ success: false, message: 'Faculty not found' });
 
     await Promise.all([
-      User.findByIdAndDelete(profile.user),
+      profile.user ? User.findByIdAndDelete(profile.user) : Promise.resolve(),
       FacultyProfile.findByIdAndDelete(req.params.id),
-      Course.updateMany({ faculty: profile.user }, { faculty: null }),
+      profile.user ? Course.updateMany({ faculty: profile.user }, { faculty: null }) : Promise.resolve(),
     ]);
     res.json({ success: true, message: 'Faculty member deleted successfully' });
   } catch (error) {

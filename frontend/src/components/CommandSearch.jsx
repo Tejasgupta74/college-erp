@@ -57,8 +57,8 @@ export const CommandSearch = ({ isOpen, onClose }) => {
 
         const filteredCourses = (courseRes.data.data || []).filter(
           (c) =>
-            c.name.toLowerCase().includes(query.toLowerCase()) ||
-            c.code.toLowerCase().includes(query.toLowerCase())
+            c.name?.toLowerCase().includes(query.toLowerCase()) ||
+            c.code?.toLowerCase().includes(query.toLowerCase())
         );
 
         setCourses(filteredCourses.slice(0, 4));

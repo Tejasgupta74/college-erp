@@ -17,7 +17,7 @@ export const getDepartments = async (req, res) => {
 export const createDepartment = async (req, res) => {
   try {
     const { name, code, description, hod = null } = req.body;
-    const department = await Department.create({ name, code, description, hod });
+    const department = await Department.create({ name, code, description, hod: hod || null });
     invalidateCache('erp:/api/academics*');
     recordAudit({ user: req.user, action: 'CREATE_DEPARTMENT', resource: 'Department', resourceId: department._id, ip: req.ip, details: { name, code } });
     res.status(201).json({ success: true, data: department });
@@ -28,7 +28,9 @@ export const createDepartment = async (req, res) => {
 
 export const updateDepartment = async (req, res) => {
   try {
-    const department = await Department.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const updateData = { ...req.body };
+    if (updateData.hod === '') updateData.hod = null;
+    const department = await Department.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!department) return res.status(404).json({ success: false, message: 'Department not found' });
     invalidateCache('erp:/api/academics*');
     recordAudit({ user: req.user, action: 'UPDATE_DEPARTMENT', resource: 'Department', resourceId: department._id, ip: req.ip });
@@ -73,7 +75,7 @@ export const getCourses = async (req, res) => {
 export const createCourse = async (req, res) => {
   try {
     const { name, code, credits, department, semester, type = 'Theory', faculty = null, description = '' } = req.body;
-    const course = await Course.create({ name, code, credits, department, semester, type, faculty, description });
+    const course = await Course.create({ name, code, credits, department, semester, type, faculty: faculty || null, description });
     invalidateCache('erp:/api/academics*');
     recordAudit({ user: req.user, action: 'CREATE_COURSE', resource: 'Course', resourceId: course._id, ip: req.ip, details: { name, code, credits } });
     res.status(201).json({ success: true, data: course });
@@ -84,7 +86,9 @@ export const createCourse = async (req, res) => {
 
 export const updateCourse = async (req, res) => {
   try {
-    const course = await Course.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
+    const updateData = { ...req.body };
+    if (updateData.faculty === '') updateData.faculty = null;
+    const course = await Course.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true })
       .populate('department', 'name code')
       .populate('faculty', 'name email');
 

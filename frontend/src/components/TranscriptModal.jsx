@@ -1,7 +1,7 @@
 import { X, Printer, GraduationCap } from 'lucide-react';
 
 export const TranscriptModal = ({ isOpen, onClose, reportCard, studentProfile, userName }) => {
-  if (!isOpen || !reportCard) return null;
+  if (!isOpen || !Array.isArray(reportCard)) return null;
 
   const handlePrint = () => window.print();
 

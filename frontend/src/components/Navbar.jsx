@@ -47,7 +47,7 @@ export const Navbar = ({ onToggleSidebar }) => {
 
   return (
     <>
-      <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+      <header className="h-16 bg-white border-b border-slate-200 px-4 sm:px-8 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         {/* Left: Mobile Toggle & Quick Search */}
         <div className="flex items-center gap-3">
           <button
@@ -62,7 +62,7 @@ export const Navbar = ({ onToggleSidebar }) => {
           <button
             type="button"
             onClick={() => setShowCommandSearch(true)}
-            className="flex items-center gap-3 bg-slate-100 hover:bg-slate-150 px-3.5 py-1.5 rounded-xl w-48 sm:w-72 text-slate-400 text-xs text-left border border-slate-200/60 transition-all hover:border-indigo-300"
+            className="flex items-center gap-3 bg-slate-100 hover:bg-slate-200 px-3.5 py-1.5 rounded-xl w-48 sm:w-72 text-slate-400 text-xs text-left border border-slate-200/60 transition-all hover:border-indigo-300"
           >
             <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
             <span className="truncate">Search courses, students...</span>

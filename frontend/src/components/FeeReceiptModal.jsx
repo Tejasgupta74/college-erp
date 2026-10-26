@@ -6,7 +6,7 @@ export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
   const handlePrint = () => window.print();
 
   const latestPayment = fee.payments && fee.payments.length > 0 ? fee.payments[fee.payments.length - 1] : null;
-  const receiptNo = latestPayment?.receiptNo || `REC-${fee._id?.slice(-6).toUpperCase()}`;
+  const receiptNo = latestPayment?.receiptNo || `REC-${fee._id?.toString()?.slice(-6)?.toUpperCase() || '000000'}`;
   const transactionId = latestPayment?.transactionId || `TXN-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
   const paymentDate = latestPayment?.date ? new Date(latestPayment.date).toLocaleDateString() : new Date().toLocaleDateString();
   const paymentMethod = latestPayment?.method || 'Online';
