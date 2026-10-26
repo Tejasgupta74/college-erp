@@ -1,0 +1,11 @@
+{
+  "name": "college-erp",
+  "version": "1.0.0",
+  "description": "Full-stack College ERP System (MERN)",
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "seed": "npm --prefix backend run seed",
+    "start": "npm --prefix backend start"
+  }
+}

@@ -1,0 +1,75 @@
+name: College ERP CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  backend-test:
+    name: Backend Lint & Integration Tests
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Seed Test Database
+        working-directory: ./backend
+        run: npm run seed
+        env:
+          MONGODB_URI: mongodb://localhost:27017/college_erp
+          JWT_SECRET: ci_test_secret_key_2026
+
+      - name: Run Backend Server in Background
+        working-directory: ./backend
+        run: node server.js &
+        env:
+          PORT: 5000
+          MONGODB_URI: mongodb://localhost:27017/college_erp
+          JWT_SECRET: ci_test_secret_key_2026
+
+      - name: Execute Automated Integration Test Suite
+        working-directory: ./backend
+        run: npm test
+
+  frontend-build:
+    name: Frontend Lint & Code-Split Production Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Verify Production Build & Asset Hashing
+        working-directory: ./frontend
+        run: npm run build
