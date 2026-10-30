@@ -1,7 +1,30 @@
-import { test, describe, before } from 'node:test';
+import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const BASE_URL = `http://localhost:${process.env.PORT || 8000}/api`;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const backendDir = path.resolve(__dirname, '..');
+
+const PORT = process.env.PORT || 8000;
+const BASE_URL = `http://localhost:${PORT}/api`;
+
+let spawnedServer = null;
+
+const checkServerHealth = async () => {
+  try {
+    const res = await fetch(`${BASE_URL}/health`, { signal: AbortSignal.timeout(1500) });
+    if (res.ok) {
+      const data = await res.json();
+      return data.status === 'online';
+    }
+  } catch {
+    return false;
+  }
+  return false;
+};
 
 describe('College ERP Production Architecture & API Test Suite', () => {
   let adminToken = '';
@@ -10,6 +33,28 @@ describe('College ERP Production Architecture & API Test Suite', () => {
   let accountantToken = '';
 
   before(async () => {
+    let isOnline = await checkServerHealth();
+    if (!isOnline) {
+      console.log(`[Test Setup] Backend server offline. Starting node server.js on port ${PORT}...`);
+      spawnedServer = spawn('node', ['server.js'], {
+        cwd: backendDir,
+        env: { ...process.env, PORT: String(PORT) },
+        stdio: 'ignore',
+      });
+
+      for (let i = 0; i < 25; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        isOnline = await checkServerHealth();
+        if (isOnline) break;
+      }
+
+      if (!isOnline) {
+        if (spawnedServer) spawnedServer.kill('SIGINT');
+        throw new Error(`[Test Setup] Failed to boot backend server on ${BASE_URL}`);
+      }
+      console.log('[Test Setup] Backend server is online and ready for tests.');
+    }
+
     // 1. Authenticate Admin
     const adminRes = await fetch(`${BASE_URL}/auth/login`, {
       method: 'POST',
@@ -203,5 +248,12 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     const data = await res.json();
     assert.ok(data.success);
     assert.match(data.message, /Password reset successfully/i);
+  });
+
+  after(async () => {
+    if (spawnedServer) {
+      console.log('[Test Teardown] Stopping test backend server process...');
+      spawnedServer.kill('SIGINT');
+    }
   });
 });

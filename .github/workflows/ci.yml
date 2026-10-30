@@ -16,6 +16,11 @@ jobs:
         image: mongo:7.0
         ports:
           - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout Repository
@@ -32,6 +37,15 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      - name: Seed Database
+        working-directory: backend
+        env:
+          PORT: 8000
+          MONGODB_URI: mongodb://localhost:27017/college_erp_test
+          JWT_SECRET: testing_jwt_super_secret_key_minimum_32_characters_2026
+          NODE_ENV: test
+        run: npm run seed
+
       - name: Run Backend Integration & Production Tests
         working-directory: backend
         env:
@@ -39,7 +53,7 @@ jobs:
           MONGODB_URI: mongodb://localhost:27017/college_erp_test
           JWT_SECRET: testing_jwt_super_secret_key_minimum_32_characters_2026
           NODE_ENV: test
-        run: node tests/api.test.js
+        run: npm test
 
   frontend-build:
     name: Frontend Build & Lint
