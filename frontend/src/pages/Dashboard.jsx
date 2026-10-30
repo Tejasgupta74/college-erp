@@ -596,19 +596,6 @@ export const Dashboard = () => {
                 ))}
             </div>
           </div>
-
-          {/* System status pill */}
-          <div className="bg-slate-900 text-white rounded-3xl p-5 shadow-lg">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">System Status</span>
-              <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Operational
-              </span>
-            </div>
-            <p className="text-xs text-slate-400">
-              MERN Stack running on Node.js + Express with MongoDB ACID replica.
-            </p>
-          </div>
         </div>
       </div>
     </div>
