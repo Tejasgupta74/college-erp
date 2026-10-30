@@ -270,11 +270,11 @@ export const Login = () => {
             </form>
           )}
 
-          {/* Quick Demo Logins Section (Development Only) */}
-          {!isForgot && import.meta.env.MODE !== 'production' && (
+          {/* Quick Demo Logins Section */}
+          {!isForgot && import.meta.env.VITE_HIDE_DEMO !== 'true' && (
             <div className="mt-8 pt-6 border-t border-slate-100">
               <p className="text-xs font-semibold text-slate-500 text-center uppercase tracking-wider mb-3">
-                ⚡ Demo 1-Click Access (Dev Mode)
+                ⚡ Demo 1-Click Access
               </p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <button
