@@ -198,7 +198,7 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     assert.ok(Array.isArray(data.data));
   });
 
-  test('9. Fees Module: Invoices & Pagination', async () => {
+  test('9. Fees Module: Invoices, Atomic Payments & Status Aggregation Pipeline', async () => {
     const res = await fetch(`${BASE_URL}/fees?page=1&limit=5`, {
       headers: { Authorization: `Bearer ${accountantToken}` },
     });
@@ -207,6 +207,29 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     assert.ok(data.success);
     assert.ok(data.total >= 0);
     assert.ok(Array.isArray(data.data));
+
+    if (data.data.length > 0) {
+      const targetInvoice = data.data.find((f) => f.paidAmount < f.totalAmount);
+      if (targetInvoice) {
+        const remaining = targetInvoice.totalAmount - targetInvoice.paidAmount;
+        const payChunk = Math.min(100, remaining);
+
+        // Record partial payment atomically via aggregation pipeline
+        const payRes = await fetch(`${BASE_URL}/fees/${targetInvoice._id}/pay`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accountantToken}`,
+          },
+          body: JSON.stringify({ amount: payChunk, method: 'UPI' }),
+        });
+        assert.equal(payRes.status, 200);
+        const payData = await payRes.json();
+        assert.ok(payData.success);
+        assert.ok(payData.receipt?.receiptNo);
+        assert.ok(['Partial', 'Paid'].includes(payData.data.status));
+      }
+    }
   });
 
   test('10. Cryptographic Token Password Reset Flow & Account Takeover Prevention', async () => {

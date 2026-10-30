@@ -1,5 +1,7 @@
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import Fee from '../models/Fee.js';
+import logger from '../config/logger.js';
 import { recordAudit } from '../utils/audit.js';
 
 // @desc    Get all fees / invoices
@@ -104,7 +106,9 @@ export const recordPayment = async (req, res) => {
       });
     }
 
-    const { amount, method = 'Offline Cash' } = req.body;
+    const { amount, method } = req.body;
+    const allowedMethods = ['Online', 'Cash', 'Cheque', 'UPI', 'Bank Transfer'];
+    const paymentMethod = allowedMethods.includes(method) ? method : 'Cash';
     const payAmount = Number(amount);
     if (isNaN(payAmount) || payAmount <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid payment amount' });
@@ -130,24 +134,42 @@ export const recordPayment = async (req, res) => {
     const transactionId = `TXN-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     const paymentDate = new Date();
 
-    // Atomic update preventing concurrency race conditions & overpayment
+    const newPaymentRecord = {
+      _id: new mongoose.Types.ObjectId(),
+      amount: payAmount,
+      transactionId,
+      method: paymentMethod,
+      date: paymentDate,
+      receiptNo,
+    };
+
+    // Single atomic update folding paidAmount, payments array, and status into an aggregation pipeline
+    // Guarantees zero race conditions, no separate save() step, and 100% transactional consistency
     const updatedFee = await Fee.findOneAndUpdate(
       {
         _id: req.params.id,
         $expr: { $lte: [{ $add: ['$paidAmount', payAmount] }, '$totalAmount'] },
       },
-      {
-        $inc: { paidAmount: payAmount },
-        $push: {
-          payments: {
-            amount: payAmount,
-            transactionId,
-            method,
-            date: paymentDate,
-            receiptNo,
+      [
+        {
+          $set: {
+            paidAmount: { $add: ['$paidAmount', payAmount] },
+            payments: {
+              $concatArrays: [
+                { $ifNull: ['$payments', []] },
+                [newPaymentRecord],
+              ],
+            },
+            status: {
+              $cond: {
+                if: { $gte: [{ $add: ['$paidAmount', payAmount] }, '$totalAmount'] },
+                then: 'Paid',
+                else: 'Partial',
+              },
+            },
           },
         },
-      },
+      ],
       { new: true }
     );
 
@@ -158,16 +180,13 @@ export const recordPayment = async (req, res) => {
       });
     }
 
-    updatedFee.status = updatedFee.paidAmount >= updatedFee.totalAmount ? 'Paid' : 'Partial';
-    await updatedFee.save();
-
     recordAudit({
       user: req.user,
       action: 'RECORD_FEE_PAYMENT',
       resource: 'Fee',
       resourceId: updatedFee._id,
       ip: req.ip,
-      details: { amount: payAmount, receiptNo, transactionId, method },
+      details: { amount: payAmount, receiptNo, transactionId, method: paymentMethod },
     });
 
     const populated = await Fee.findById(updatedFee._id)
@@ -181,6 +200,7 @@ export const recordPayment = async (req, res) => {
       data: populated,
     });
   } catch (error) {
+    logger.error('Failed to record payment', { error: error.message, stack: error.stack });
     res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
