@@ -52,7 +52,7 @@ college-erp/
 │   ├── models/                    # Mongoose schemas with compound indexes
 │   ├── routes/                    # Protected REST endpoint routing
 │   ├── tests/
-│   │   └── api.test.js            # Node test runner suite (10 integration test suites)
+│   │   └── api.test.js            # Node test runner suite (11 integration test suites)
 │   ├── utils/                     # Token generators and audit log helpers
 │   ├── Dockerfile                 # Multi-stage production container
 │   ├── seeder.js                  # Dev-only database seeder (blocked in prod)
@@ -157,11 +157,13 @@ npm run seed
 - `POST /courses`: Creates academic course (Admin only).
 
 ### Student Management (`/api/students`)
-- `GET /`: Lists students with roll numbers and pagination (Admin, Faculty, Accountant).
+- `GET /`: Lists students with roll numbers, search, and pagination (Admin, Faculty, Accountant; supports `?all=true` for full cohort export).
+- `GET /roster`: Retrieves unpaginated course cohort roster for attendance marking and exam grading (Admin, Faculty).
 - `GET /:id`: Retrieves complete student dossier including fee and exam history.
 
 ### Attendance Module (`/api/attendance`)
-- `POST /`: Records or updates class session attendance.
+- `POST /`: Records or updates class session attendance (supports timezone-independent `dateString`, `sessionSlot`, and `sessionType`).
+- `GET /`: Lists class attendance sessions with course, section, and date filters.
 - `GET /student/:studentId`: Returns student course attendance percentages and shortage flags.
 
 ### Exams & Marks (`/api/exams`)
@@ -200,9 +202,9 @@ This repository includes a [`render.yaml`](./render.yaml) specification configur
    ```bash
    JWT_SECRET="your_secure_32_char_secret_key" docker compose up -d --build
    ```
-4. **Automated Testing**:
-   - Execute the test suite before triggering production deployment:
+4. **Automated Testing & Build Verification**:
+   - Execute the test and verification suites before triggering production deployment:
    ```bash
    cd backend && npm test
-   cd ../frontend && npm run build
+   cd ../frontend && npm run lint && npm run build
    ```
