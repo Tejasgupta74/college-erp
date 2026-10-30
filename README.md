@@ -178,10 +178,21 @@ npm run seed
 
 ## 🚢 Production Deployment Checklist
 
+### Render 1-Click Blueprint Deployment (Recommended)
+This repository includes a [`render.yaml`](./render.yaml) specification configured for automatic deployment:
+1. Log in to [Render Dashboard](https://dashboard.render.com).
+2. Click **New +** and select **Blueprint**.
+3. Connect your GitHub repository (`Tejasgupta74/college-erp`).
+4. Set the `MONGODB_URI` environment variable to your MongoDB Atlas connection string.
+5. Click **Apply**: Render automatically builds and provisions both:
+   - **`college-erp-backend`** (Web Service, Node runtime, `/api/health` health check)
+   - **`college-erp-frontend`** (Static Site with SPA rewrite rules and auto-linked `VITE_API_URL`)
+
+### Standard Production Checklist
 1. **Environment Security**:
    - Ensure `NODE_ENV=production`.
    - Set `JWT_SECRET` to a cryptographically random string (≥ 32 characters).
-   - Set `CORS_ORIGIN` to the exact production domain (never `*`).
+   - Set `CORS_ORIGIN` to your frontend production domain (or `*`).
 2. **Database Hardening**:
    - Enable SSL/TLS encryption for MongoDB connections (`retryWrites=true&w=majority`).
    - Create dedicated database user roles with least privilege.

@@ -43,11 +43,19 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(mongoSanitize());
 app.use(cookieParser());
 
-const allowedOrigin = process.env.CORS_ORIGIN || process.env.CLIENT_URL || 'http://localhost:3000';
+const rawAllowedOrigin = process.env.CORS_ORIGIN || process.env.CLIENT_URL || 'http://localhost:3000';
+const allowedOrigins = rawAllowedOrigin.split(',').map((o) => o.trim());
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps, curl, or server-to-server)
-    if (!origin || origin === allowedOrigin || allowedOrigin === '*') {
+    if (
+      !origin ||
+      allowedOrigins.includes('*') ||
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.onrender.com') ||
+      origin.includes('localhost')
+    ) {
       return callback(null, true);
     }
     return callback(new Error(`CORS blocked for origin: ${origin}`));
