@@ -35,3 +35,5 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://college-erp-backend-hj58.onrender.com
+      - key: VITE_HIDE_DEMO
+        value: "true"
