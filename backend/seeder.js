@@ -15,13 +15,24 @@ dotenv.config();
 
 const seedData = async () => {
   try {
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
       console.error('[Seeder Blocked] Seeder script is strictly prohibited from running when NODE_ENV=production.');
       process.exit(1);
     }
 
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('[Seeder] Connected to MongoDB Atlas');
+    const uri = process.env.MONGODB_URI || '';
+    const isAtlas = uri.includes('mongodb.net');
+
+    await mongoose.connect(uri);
+    const dbName = mongoose.connection.name;
+    console.log(`[Seeder] Connected to MongoDB database: "${dbName}"`);
+
+    // Strict guard: Protect live/production databases from accidental data wiping
+    if ((isAtlas || dbName === 'college_erp') && process.env.ALLOW_SEED !== 'true') {
+      console.error(`[Seeder Guard Blocked] Target database "${dbName}" appears to be a production/live cluster.`);
+      console.error('[Seeder Guard Blocked] To explicitly wipe and seed this database, set ALLOW_SEED=true.');
+      process.exit(1);
+    }
 
     // 1. Clear existing collections
     await Promise.all([

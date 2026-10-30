@@ -27,9 +27,11 @@ const formatUserResponse = (user, profile) => ({
 // @access  Public
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ success: false, message: 'Please provide email and password' });
+    const rawEmail = req.body.email;
+    const { password } = req.body;
+    if (!rawEmail || !password) return res.status(400).json({ success: false, message: 'Please provide email and password' });
 
+    const email = rawEmail.trim().toLowerCase();
     const user = await User.findOne({ email }).select('+password');
     if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -37,7 +39,7 @@ export const login = async (req, res) => {
     if (!user.isActive) return res.status(403).json({ success: false, message: 'Your account has been deactivated. Contact Admin.' });
 
     const profile = await getProfileForUser(user);
-    const token = generateToken(user._id);
+    const token = generateToken(user._id, user.tokenVersion || 0);
 
     // Set secure HTTP-only cookie
     const isProd = process.env.NODE_ENV === 'production';
@@ -92,9 +94,12 @@ export const createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please select a department' });
     }
 
-    if (await User.findOne({ email })) return res.status(400).json({ success: false, message: 'User with this email already exists' });
+    const normalizedEmail = email.trim().toLowerCase();
+    if (await User.findOne({ email: normalizedEmail })) return res.status(400).json({ success: false, message: 'User with this email already exists' });
 
-    const user = await User.create({ name, email, password: password || 'College@123', role, phone });
+    // Generate secure random temporary password if none provided
+    const userPassword = password || `Temp#${crypto.randomBytes(4).toString('hex')}!`;
+    const user = await User.create({ name: name.trim(), email: normalizedEmail, password: userPassword, role, phone });
     let profile = null;
 
     try {
@@ -155,6 +160,7 @@ export const changePassword = async (req, res) => {
     }
 
     user.password = newPassword;
+    user.tokenVersion = (user.tokenVersion || 0) + 1; // Invalidate all prior active sessions
     await user.save();
 
     recordAudit({
@@ -165,39 +171,101 @@ export const changePassword = async (req, res) => {
       ip: req.ip,
     });
 
-    res.json({ success: true, message: 'Password updated successfully' });
+    res.json({ success: true, message: 'Password updated successfully. Existing sessions invalidated.' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Reset Password directly with email and new password (no tokens needed)
-// @route   POST /api/auth/reset-password or /api/auth/forgot-password
+// @desc    Generate password reset token & email/return instructions
+// @route   POST /api/auth/forgot-password
+// @access  Public
+export const forgotPassword = async (req, res) => {
+  try {
+    const rawEmail = req.body.email;
+    if (!rawEmail) {
+      return res.status(400).json({ success: false, message: 'Please provide your registered institutional email' });
+    }
+
+    const email = rawEmail.trim().toLowerCase();
+    const user = await User.findOne({ email });
+
+    // Respond with generic success to prevent account enumeration
+    if (!user) {
+      return res.json({
+        success: true,
+        message: 'If the provided email is registered, password reset instructions have been generated.',
+      });
+    }
+
+    const resetToken = user.getResetPasswordToken();
+    await user.save({ validateBeforeSave: false });
+
+    recordAudit({
+      user,
+      action: 'FORGOT_PASSWORD_REQUESTED',
+      resource: 'User',
+      resourceId: user._id,
+      ip: req.ip,
+      details: { email: user.email },
+    });
+
+    const isNonProd = process.env.NODE_ENV !== 'production';
+
+    res.json({
+      success: true,
+      message: 'Password reset token generated successfully. Valid for 15 minutes.',
+      // In development or test environments, include the token for verification
+      ...(isNonProd && { resetToken }),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Verify cryptographically hashed token & reset password
+// @route   POST /api/auth/reset-password or /api/auth/reset-password/:token
 // @access  Public
 export const resetPassword = async (req, res) => {
   try {
-    const { email, newPassword } = req.body;
-    if (!email || !newPassword) {
-      return res.status(400).json({ success: false, message: 'Please provide your registered email and new password' });
+    const token = req.params.token || req.body.token;
+    const { newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide the password reset token and your new password',
+      });
     }
 
     if (newPassword.length < 6) {
       return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long' });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    // Hash incoming token to match against sha256 in database
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
     if (!user) {
-      return res.status(404).json({ success: false, message: 'No registered user found with this email address' });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired password reset token',
+      });
     }
 
     user.password = newPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
+    user.tokenVersion = (user.tokenVersion || 0) + 1; // Invalidate all prior active sessions
     await user.save();
 
     recordAudit({
       user,
-      action: 'DIRECT_RESET_PASSWORD',
+      action: 'PASSWORD_RESET_SUCCESS',
       resource: 'User',
       resourceId: user._id,
       ip: req.ip,
@@ -213,12 +281,15 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-export const forgotPassword = resetPassword;
-
 // @desc    Logout user & clear cookie
 // @route   POST /api/auth/logout
 // @access  Public
 export const logout = async (req, res) => {
+  if (req.user) {
+    req.user.tokenVersion = (req.user.tokenVersion || 0) + 1;
+    await req.user.save();
+  }
+
   res.cookie('token', '', {
     httpOnly: true,
     expires: new Date(0),

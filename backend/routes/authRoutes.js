@@ -17,6 +17,7 @@ router.post('/login', authLimiter, login);
 router.post('/logout', logout);
 router.post('/forgot-password', sensitiveLimiter, forgotPassword);
 router.post('/reset-password', sensitiveLimiter, resetPassword);
+router.post('/reset-password/:token', sensitiveLimiter, resetPassword);
 router.get('/me', protect, getMe);
 router.post('/create-user', protect, authorize('admin'), createUser);
 router.put('/change-password', protect, sensitiveLimiter, changePassword);

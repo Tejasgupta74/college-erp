@@ -3,9 +3,8 @@ import axios from 'axios';
 export const DEFAULT_BACKEND_URL = 'https://college-erp-backend-hj58.onrender.com';
 
 export const getApiBaseUrl = () => {
-  const customUrl = typeof window !== 'undefined' ? localStorage.getItem('erp_api_url') : null;
   const isRenderDeploy = typeof window !== 'undefined' && window.location.hostname.includes('onrender.com');
-  const rawUrl = customUrl || import.meta.env.VITE_API_URL || (isRenderDeploy ? DEFAULT_BACKEND_URL : null);
+  const rawUrl = import.meta.env.VITE_API_URL || (isRenderDeploy ? DEFAULT_BACKEND_URL : null);
   if (!rawUrl) return '/api';
   const withProtocol = rawUrl.startsWith('http://') || rawUrl.startsWith('https://')
     ? rawUrl

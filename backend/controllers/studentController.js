@@ -21,36 +21,56 @@ export const getStudents = async (req, res) => {
       query.$or = assignments.length ? assignments : [{ _id: null }];
     }
 
-    let profileQuery = StudentProfile.find(query);
-    if (req.user.role === 'faculty') profileQuery = profileQuery.select('user enrollmentNo rollNo department semester section batchYear');
-    let profiles = await profileQuery
-      .populate('user', 'name email phone avatar isActive')
-      .populate('department', 'name code')
-      .sort({ rollNo: 1 });
+    if (search && search.trim()) {
+      const s = search.trim();
+      const matchingUsers = await User.find({
+        $or: [
+          { name: { $regex: s, $options: 'i' } },
+          { email: { $regex: s, $options: 'i' } },
+        ],
+      }).select('_id');
+      const userIds = matchingUsers.map((u) => u._id);
 
-    if (search) {
-      const s = search.toLowerCase();
-      profiles = profiles.filter((p) =>
-        p.user?.name?.toLowerCase().includes(s) ||
-        p.user?.email?.toLowerCase().includes(s) ||
-        p.rollNo?.toLowerCase().includes(s) ||
-        p.enrollmentNo?.toLowerCase().includes(s)
-      );
+      const searchConditions = [
+        { rollNo: { $regex: s, $options: 'i' } },
+        { enrollmentNo: { $regex: s, $options: 'i' } },
+        { user: { $in: userIds } },
+      ];
+
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchConditions }];
+        delete query.$or;
+      } else {
+        query.$or = searchConditions;
+      }
     }
 
-    const totalCount = profiles.length;
-    const pageNum = Math.max(1, parseInt(page, 10));
-    const limitNum = Math.max(1, parseInt(limit, 10));
-    const startIndex = (pageNum - 1) * limitNum;
-    const paginatedProfiles = profiles.slice(startIndex, startIndex + limitNum);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
+    const skip = (pageNum - 1) * limitNum;
+
+    let profileQuery = StudentProfile.find(query);
+    if (req.user.role === 'faculty') {
+      profileQuery = profileQuery.select('user enrollmentNo rollNo department semester section batchYear');
+    }
+
+    const [profiles, totalCount] = await Promise.all([
+      profileQuery
+        .populate('user', 'name email phone avatar isActive')
+        .populate('department', 'name code')
+        .sort({ rollNo: 1 })
+        .skip(skip)
+        .limit(limitNum),
+      StudentProfile.countDocuments(query),
+    ]);
 
     res.json({
       success: true,
-      count: paginatedProfiles.length,
+      count: profiles.length,
       total: totalCount,
       page: pageNum,
       pages: Math.ceil(totalCount / limitNum),
-      data: paginatedProfiles,
+      data: profiles,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -162,11 +182,27 @@ export const deleteStudent = async (req, res) => {
     const profile = await StudentProfile.findById(req.params.id);
     if (!profile) return res.status(404).json({ success: false, message: 'Student not found' });
 
+    const studentUserId = profile.user;
+
     await Promise.all([
-      profile.user ? User.findByIdAndDelete(profile.user) : Promise.resolve(),
+      studentUserId ? User.findByIdAndDelete(studentUserId) : Promise.resolve(),
       StudentProfile.findByIdAndDelete(req.params.id),
+      // Cascade delete / sanitize associated orphaned records
+      studentUserId ? Attendance.updateMany({}, { $pull: { records: { student: studentUserId } } }) : Promise.resolve(),
+      studentUserId ? Fee.deleteMany({ student: studentUserId }) : Promise.resolve(),
+      studentUserId ? Exam.updateMany({}, { $pull: { results: { student: studentUserId } } }) : Promise.resolve(),
     ]);
-    res.json({ success: true, message: 'Student deleted successfully' });
+
+    recordAudit({
+      user: req.user,
+      action: 'DELETE_STUDENT_CASCADE',
+      resource: 'StudentProfile',
+      resourceId: req.params.id,
+      ip: req.ip,
+      details: { enrollmentNo: profile.enrollmentNo, rollNo: profile.rollNo },
+    });
+
+    res.json({ success: true, message: 'Student profile and associated academic records deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -18,7 +18,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: '*'
+        value: https://college-erp-frontend-lira.onrender.com
 
   # 2. College ERP Frontend SPA (Static Site)
   # Note: Static sites are served via Render's global CDN and cannot have a region field

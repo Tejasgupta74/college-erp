@@ -1,6 +1,7 @@
 import Department from '../models/Department.js';
 import Course from '../models/Course.js';
 import StudentProfile from '../models/StudentProfile.js';
+import Attendance from '../models/Attendance.js';
 import { invalidateCache } from '../config/cache.js';
 import { recordAudit } from '../utils/audit.js';
 
@@ -43,11 +44,26 @@ export const updateDepartment = async (req, res) => {
 
 export const deleteDepartment = async (req, res) => {
   try {
-    const department = await Department.findByIdAndDelete(req.params.id);
+    const department = await Department.findById(req.params.id);
     if (!department) return res.status(404).json({ success: false, message: 'Department not found' });
+
+    // Guard: check for orphaned references in courses and students
+    const [coursesCount, studentsCount] = await Promise.all([
+      Course.countDocuments({ department: req.params.id }),
+      StudentProfile.countDocuments({ department: req.params.id }),
+    ]);
+
+    if (coursesCount > 0 || studentsCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete department: ${coursesCount} courses and ${studentsCount} students are currently associated with it. Please reassign or remove them first.`,
+      });
+    }
+
+    await Department.findByIdAndDelete(req.params.id);
     invalidateCache('erp:/api/academics*');
     recordAudit({ user: req.user, action: 'DELETE_DEPARTMENT', resource: 'Department', resourceId: req.params.id, ip: req.ip });
-    res.json({ success: true, message: 'Department removed' });
+    res.json({ success: true, message: 'Department removed successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -113,11 +129,22 @@ export const updateCourse = async (req, res) => {
 
 export const deleteCourse = async (req, res) => {
   try {
-    const course = await Course.findByIdAndDelete(req.params.id);
+    const course = await Course.findById(req.params.id);
     if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
+
+    // Guard: check for associated attendance records
+    const attendanceCount = await Attendance.countDocuments({ course: req.params.id });
+    if (attendanceCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete course: ${attendanceCount} attendance sessions are recorded for it. Please archive or reassign attendance first.`,
+      });
+    }
+
+    await Course.findByIdAndDelete(req.params.id);
     invalidateCache('erp:/api/academics*');
     recordAudit({ user: req.user, action: 'DELETE_COURSE', resource: 'Course', resourceId: req.params.id, ip: req.ip });
-    res.json({ success: true, message: 'Course removed' });
+    res.json({ success: true, message: 'Course removed successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

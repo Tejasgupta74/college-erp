@@ -45,11 +45,20 @@ export const errorHandler = (err, req, res, next) => {
     code,
   });
 
+  // Sanitize 500 responses in production to prevent leaking system internals
+  const sanitizedMessage =
+    statusCode >= 500 && process.env.NODE_ENV === 'production'
+      ? 'An unexpected server error occurred. Please contact institutional support.'
+      : message;
+
+  const sanitizedDetails =
+    statusCode >= 500 && process.env.NODE_ENV === 'production' ? null : details;
+
   res.status(statusCode).json({
     success: false,
     code,
-    message,
-    details,
+    message: sanitizedMessage,
+    details: sanitizedDetails,
     requestId: req.id,
     timestamp: new Date().toISOString(),
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),

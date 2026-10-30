@@ -1,7 +1,3 @@
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
-
 /**
  * Institutional Header for College ERP Documents
  */
@@ -58,9 +54,12 @@ const addInstitutionalFooter = (doc) => {
 };
 
 /**
- * 1. Generate Fee Receipt PDF
+ * 1. Generate Fee Receipt PDF (lazy-loaded)
  */
-export const exportFeeReceiptPDF = (fee) => {
+export const exportFeeReceiptPDF = async (fee) => {
+  const { jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
   const doc = new jsPDF();
   const receiptNo = fee.receiptNo || `REC-${fee._id.toString().slice(-8).toUpperCase()}`;
 
@@ -100,7 +99,7 @@ export const exportFeeReceiptPDF = (fee) => {
   }
 
   if (breakdownRows.length === 0) {
-    breakdownRows.push(['Tuition Fee', `Rs. ${Number(fee.amount || 0).toLocaleString()}`]);
+    breakdownRows.push(['Tuition Fee', `Rs. ${Number(fee.amount || fee.totalAmount || 0).toLocaleString()}`]);
   }
 
   autoTable(doc, {
@@ -108,8 +107,10 @@ export const exportFeeReceiptPDF = (fee) => {
     head: [['Fee Head / Component', 'Amount (INR)']],
     body: [
       ...breakdownRows,
-      [{ content: 'Total Paid Amount', styles: { fontStyle: 'bold', fillColor: [248, 250, 252] } },
-       { content: `Rs. ${Number(fee.amount || 0).toLocaleString()}`, styles: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [79, 70, 229] } }],
+      [
+        { content: 'Total Paid Amount', styles: { fontStyle: 'bold', fillColor: [248, 250, 252] } },
+        { content: `Rs. ${Number(fee.amount || fee.paidAmount || fee.totalAmount || 0).toLocaleString()}`, styles: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [79, 70, 229] } },
+      ],
     ],
     theme: 'striped',
     headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
@@ -121,9 +122,12 @@ export const exportFeeReceiptPDF = (fee) => {
 };
 
 /**
- * 2. Generate Student Marksheet / Grade Card PDF
+ * 2. Generate Student Marksheet / Grade Card PDF (lazy-loaded)
  */
-export const exportMarksheetPDF = (exam, student, results) => {
+export const exportMarksheetPDF = async (exam, student, results) => {
+  const { jsPDF } = await import('jspdf');
+  const { default: autoTable } = await import('jspdf-autotable');
+
   const doc = new jsPDF();
   addInstitutionalHeader(doc, 'Institutional Grade Sheet / Marksheet', `${exam.name || 'End Semester Examination'} • ${exam.academicYear || '2024-2025'}`);
 
@@ -178,26 +182,69 @@ export const exportMarksheetPDF = (exam, student, results) => {
 };
 
 /**
- * 3. Export Data to Excel (.xlsx)
+ * 3. Export Data to Excel (.xlsx) using ExcelJS (lazy-loaded, prototype-pollution free)
  */
-export const exportToExcel = (data, fileName, sheetName = 'Sheet1') => {
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-  XLSX.writeFile(workbook, `${fileName}.xlsx`);
+export const exportToExcel = async (data, fileName, sheetName = 'Sheet1') => {
+  const ExcelJS = await import('exceljs');
+  const WorkbookClass = ExcelJS.Workbook || ExcelJS.default?.Workbook;
+  const workbook = new WorkbookClass();
+  const worksheet = workbook.addWorksheet(sheetName);
+
+  if (data && data.length > 0) {
+    const keys = Object.keys(data[0]);
+    worksheet.columns = keys.map((key) => ({
+      header: key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()),
+      key,
+      width: Math.max(14, key.length + 4),
+    }));
+
+    data.forEach((row) => worksheet.addRow(row));
+
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4F46E5' },
+    };
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.setAttribute('download', `${fileName}.xlsx`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
 };
 
 /**
- * 4. Export Data to CSV
+ * 4. Export Data to CSV (native pure JS, 0 dependencies)
  */
 export const exportToCSV = (data, fileName) => {
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const csvOutput = XLSX.utils.sheet_to_csv(worksheet);
-  const blob = new Blob([csvOutput], { type: 'text/csv;charset=utf-8;' });
+  if (!data || data.length === 0) return;
+  const headers = Object.keys(data[0]);
+  const rows = [
+    headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(','),
+    ...data.map((item) =>
+      headers
+        .map((h) => {
+          const val = item[h] ?? '';
+          return `"${String(val).replace(/"/g, '""')}"`;
+        })
+        .join(',')
+    ),
+  ];
+
+  const blob = new Blob([rows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.setAttribute('download', `${fileName}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
 };

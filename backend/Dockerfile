@@ -13,10 +13,13 @@ FROM node:22-alpine
 
 WORKDIR /usr/src/app
 
+COPY --chown=node:node --from=builder /usr/src/app ./
+
+# Ensure writeable directories for non-root execution
+RUN mkdir -p uploads logs && chown -R node:node uploads logs
+
 # Non-root unprivileged security execution
 USER node
-
-COPY --chown=node:node --from=builder /usr/src/app ./
 
 ENV NODE_ENV=production
 ENV PORT=8000

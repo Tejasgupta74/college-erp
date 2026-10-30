@@ -236,16 +236,22 @@ export const Fees = () => {
                             )}
 
                             {fee.status !== 'Paid' ? (
-                              <button
-                                onClick={() => {
-                                  setSelectedFee(fee);
-                                  setPayAmount(balance.toString());
-                                  setShowPayModal(true);
-                                }}
-                                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
-                              >
-                                Pay / Settle
-                              </button>
+                              user?.role === 'admin' ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedFee(fee);
+                                    setPayAmount(balance.toString());
+                                    setShowPayModal(true);
+                                  }}
+                                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
+                                >
+                                  Approve Payment
+                                </button>
+                              ) : (
+                                <span className="text-xs text-amber-600 font-medium px-2.5 py-1 bg-amber-50 rounded-lg">
+                                  Pending Approval
+                                </span>
+                              )
                             ) : (
                               <div className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-[11px] px-2 py-1 bg-emerald-50 rounded-lg">
                                 <CheckCircle2 className="w-3.5 h-3.5" /> Settled
@@ -273,7 +279,7 @@ export const Fees = () => {
       {showPayModal && selectedFee && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl">
-            <h3 className="font-bold text-lg text-slate-900 mb-1">Process Fee Payment</h3>
+            <h3 className="font-bold text-lg text-slate-900 mb-1">Approve & Record Fee Payment</h3>
             <p className="text-xs text-slate-500 mb-4">{selectedFee.title}</p>
 
             <div className="p-4 bg-slate-50 rounded-2xl mb-4 text-xs space-y-1">

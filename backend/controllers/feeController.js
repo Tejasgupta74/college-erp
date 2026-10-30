@@ -1,11 +1,16 @@
+import crypto from 'crypto';
 import Fee from '../models/Fee.js';
 import { recordAudit } from '../utils/audit.js';
 
 // @desc    Get all fees / invoices
 // @route   GET /api/fees
-// @access  Private
+// @access  Private (Admin, Accountant, Student)
 export const getFees = async (req, res) => {
   try {
+    if (req.user.role === 'faculty') {
+      return res.status(403).json({ success: false, message: 'Faculty are not authorized to access fee records' });
+    }
+
     const { studentId, status, departmentId, page = 1, limit = 20 } = req.query;
     const query = {};
 
@@ -19,8 +24,8 @@ export const getFees = async (req, res) => {
     if (status) query.status = status;
     if (departmentId) query.department = departmentId;
 
-    const pageNum = Math.max(1, parseInt(page, 10));
-    const limitNum = Math.max(1, parseInt(limit, 10));
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
     const skip = (pageNum - 1) * limitNum;
 
     const [fees, totalCount] = await Promise.all([
@@ -84,29 +89,28 @@ export const createFeeInvoice = async (req, res) => {
   }
 };
 
-// @desc    Record fee payment
+// @desc    Record and approve fee payment
 // @route   POST /api/fees/:id/pay
-// @access  Private
+// @access  Private (Admin only)
 export const recordPayment = async (req, res) => {
   try {
-    const { amount, method = 'Online' } = req.body;
-    const fee = await Fee.findById(req.params.id);
-    if (!fee) return res.status(404).json({ success: false, message: 'Fee invoice not found' });
-
-    // Role verification: Student can only pay their own fee; faculty cannot record payments
-    if (req.user.role === 'student' && fee.student.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, message: 'You are only authorized to pay your own fees' });
-    }
-    if (req.user.role === 'faculty') {
-      return res.status(403).json({ success: false, message: 'Faculty are not authorized to process fee payments' });
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only Administrators are authorized to approve and record fee payments',
+      });
     }
 
+    const { amount, method = 'Offline Cash' } = req.body;
     const payAmount = Number(amount);
     if (isNaN(payAmount) || payAmount <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid payment amount' });
     }
 
-    // Overpayment prevention
+    const fee = await Fee.findById(req.params.id);
+    if (!fee) return res.status(404).json({ success: false, message: 'Fee invoice not found' });
+
+    // Check balance before processing
     const remainingDue = Math.max(0, fee.totalAmount - fee.paidAmount);
     if (remainingDue <= 0) {
       return res.status(400).json({ success: false, message: 'This invoice is already fully settled' });
@@ -114,29 +118,56 @@ export const recordPayment = async (req, res) => {
     if (payAmount > remainingDue) {
       return res.status(400).json({
         success: false,
-        message: `Payment amount (${payAmount}) exceeds the remaining balance of ₹${remainingDue}`,
+        message: `Payment amount (₹${payAmount}) exceeds the remaining balance of ₹${remainingDue}`,
       });
     }
 
-    const receiptNo = `REC-${Date.now().toString().slice(-6)}`;
-    const transactionId = `TXN-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    // Cryptographically secure collision-resistant receipt & transaction IDs
+    const receiptNo = `REC-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+    const transactionId = `TXN-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     const paymentDate = new Date();
 
-    fee.payments.push({ amount: payAmount, transactionId, method, date: paymentDate, receiptNo });
-    fee.paidAmount += payAmount;
-    fee.status = fee.paidAmount >= fee.totalAmount ? 'Paid' : 'Partial';
-    await fee.save();
+    // Atomic update preventing concurrency race conditions & overpayment
+    const updatedFee = await Fee.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        $expr: { $lte: [{ $add: ['$paidAmount', payAmount] }, '$totalAmount'] },
+      },
+      {
+        $inc: { paidAmount: payAmount },
+        $push: {
+          payments: {
+            amount: payAmount,
+            transactionId,
+            method,
+            date: paymentDate,
+            receiptNo,
+          },
+        },
+      },
+      { new: true }
+    );
+
+    if (!updatedFee) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment rejected: amount exceeds invoice balance or invoice is already settled.',
+      });
+    }
+
+    updatedFee.status = updatedFee.paidAmount >= updatedFee.totalAmount ? 'Paid' : 'Partial';
+    await updatedFee.save();
 
     recordAudit({
       user: req.user,
       action: 'RECORD_FEE_PAYMENT',
       resource: 'Fee',
-      resourceId: fee._id,
+      resourceId: updatedFee._id,
       ip: req.ip,
       details: { amount: payAmount, receiptNo, transactionId, method },
     });
 
-    const updated = await Fee.findById(fee._id)
+    const populated = await Fee.findById(updatedFee._id)
       .populate('student', 'name email phone')
       .populate('department', 'name code');
 
@@ -144,7 +175,7 @@ export const recordPayment = async (req, res) => {
       success: true,
       message: 'Payment recorded successfully',
       receipt: { receiptNo, transactionId, amount: payAmount, date: paymentDate },
-      data: updated,
+      data: populated,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

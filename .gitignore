@@ -23,11 +23,8 @@ yarn-debug.log*
 yarn-error.log*
 
 # Uploads & User Generated Files
-uploads/
-*.pdf
-*.png
-*.jpg
-*.jpeg
+uploads/*
+!uploads/.gitkeep
 
 # Editor & OS files
 .DS_Store

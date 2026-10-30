@@ -56,7 +56,7 @@ jobs:
         run: npm test
 
   frontend-build:
-    name: Frontend Build & Lint
+    name: Frontend Build & Verification
     runs-on: ubuntu-latest
 
     steps:

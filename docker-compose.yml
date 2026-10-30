@@ -5,23 +5,10 @@ services:
     image: mongo:7.0
     container_name: erp-mongodb
     restart: unless-stopped
-    ports:
-      - '27017:27017'
     environment:
       MONGO_INITDB_DATABASE: college_erp
     volumes:
       - mongo_data:/data/db
-    networks:
-      - erp-network
-
-  redis:
-    image: redis:7.2-alpine
-    container_name: erp-redis
-    restart: unless-stopped
-    ports:
-      - '6379:6379'
-    volumes:
-      - redis_data:/data
     networks:
       - erp-network
 
@@ -37,7 +24,6 @@ services:
       NODE_ENV: production
       PORT: 8000
       MONGODB_URI: mongodb://mongodb:27017/college_erp
-      REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET before starting Compose}
       CORS_ORIGIN: http://localhost:3000
       CLIENT_URL: http://localhost:3000
@@ -46,7 +32,6 @@ services:
       - log_data:/usr/src/app/logs
     depends_on:
       - mongodb
-      - redis
     networks:
       - erp-network
 
@@ -65,7 +50,6 @@ services:
 
 volumes:
   mongo_data:
-  redis_data:
   upload_data:
   log_data:
 

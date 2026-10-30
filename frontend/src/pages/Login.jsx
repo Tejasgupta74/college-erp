@@ -17,6 +17,8 @@ import {
 export const Login = () => {
   // Modes: 'signin' | 'forgot'
   const [isForgot, setIsForgot] = useState(false);
+  const [resetStep, setResetStep] = useState(1); // 1 = request token, 2 = enter token & new password
+  const [resetToken, setResetToken] = useState('');
 
   // Form fields
   const [email, setEmail] = useState('');
@@ -47,11 +49,37 @@ export const Login = () => {
     }
   };
 
-  // Direct Password Reset Handler (No token generation or entry)
+  // Step 1: Request Password Reset Token
+  const handleRequestResetToken = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      const res = await api.post('/auth/forgot-password', { email });
+      setSuccess(res.data?.message || 'Password reset instructions have been generated.');
+      if (res.data?.resetToken) {
+        setResetToken(res.data.resetToken);
+      }
+      setResetStep(2);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to request reset token. Please check your email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2: Submit Token & Set New Password
   const handleResetPassword = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!resetToken.trim()) {
+      setError('Please provide the password reset token');
+      return;
+    }
 
     if (newPassword.length < 6) {
       setError('New password must be at least 6 characters long');
@@ -66,16 +94,18 @@ export const Login = () => {
     setLoading(true);
     try {
       const res = await api.post('/auth/reset-password', {
-        email,
+        token: resetToken.trim(),
         newPassword,
       });
       setSuccess(res.data?.message || 'Password reset successfully! You can now sign in.');
       setPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setResetToken('');
+      setResetStep(1);
       setIsForgot(false);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to reset password. Please verify your email.');
+      setError(err.response?.data?.message || 'Invalid or expired password reset token.');
     } finally {
       setLoading(false);
     }
@@ -114,11 +144,13 @@ export const Login = () => {
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-slate-800">
-                {isForgot ? 'Reset Password' : 'Sign in to your account'}
+                {isForgot ? (resetStep === 1 ? 'Forgot Password' : 'Set New Password') : 'Sign in to your account'}
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 {isForgot
-                  ? 'Enter your institutional email and set your new password directly'
+                  ? (resetStep === 1
+                      ? 'Enter your institutional email to request a secure reset token'
+                      : 'Enter the verification token and your new password')
                   : 'Enter your institutional credentials to continue'}
               </p>
             </div>
@@ -126,6 +158,8 @@ export const Login = () => {
               type="button"
               onClick={() => {
                 setIsForgot(!isForgot);
+                setResetStep(1);
+                setResetToken('');
                 setError('');
                 setSuccess('');
               }}
@@ -202,9 +236,9 @@ export const Login = () => {
                 )}
               </button>
             </form>
-          ) : (
-            /* DIRECT PASSWORD RESET FORM (No token required) */
-            <form onSubmit={handleResetPassword} className="space-y-4">
+          ) : resetStep === 1 ? (
+            /* SECURE PASSWORD RESET - STEP 1 (REQUEST TOKEN) */
+            <form onSubmit={handleRequestResetToken} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
                   Registered Institutional Email
@@ -220,6 +254,38 @@ export const Login = () => {
                     className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
                   />
                 </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  A 15-minute cryptographically secure reset token will be issued for this account.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span>Request Reset Token</span>
+                )}
+              </button>
+            </form>
+          ) : (
+            /* SECURE PASSWORD RESET - STEP 2 (ENTER TOKEN & SET PASSWORD) */
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
+                  Reset Token
+                </label>
+                <input
+                  type="text"
+                  value={resetToken}
+                  onChange={(e) => setResetToken(e.target.value)}
+                  placeholder="Paste 64-character hex token"
+                  required
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
+                />
               </div>
 
               <div>
@@ -256,22 +322,31 @@ export const Login = () => {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-emerald-200 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              >
-                {loading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <span>Reset Password</span>
-                )}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResetStep(1)}
+                  className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-colors"
+                >
+                  ← Resend
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-emerald-200 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <span>Set New Password</span>
+                  )}
+                </button>
+              </div>
             </form>
           )}
 
-          {/* Quick Demo Logins Section */}
-          {!isForgot && import.meta.env.VITE_HIDE_DEMO !== 'true' && (
+          {/* Quick Demo Logins Section - strictly shown only in development mode */}
+          {!isForgot && import.meta.env.DEV && (
             <div className="mt-8 pt-6 border-t border-slate-100">
               <p className="text-xs font-semibold text-slate-500 text-center uppercase tracking-wider mb-3">
                 ⚡ Demo 1-Click Access

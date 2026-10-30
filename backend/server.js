@@ -39,46 +39,63 @@ if (process.env.NODE_ENV === 'production' && process.env.JWT_SECRET.length < 32)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+// Trust reverse proxy (Render / Cloudflare / Nginx) so client IP and rate-limiting work properly
+app.set('trust proxy', 1);
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(mongoSanitize());
 app.use(cookieParser());
 
-const rawAllowedOrigin = process.env.CORS_ORIGIN || process.env.CLIENT_URL || 'http://localhost:3000';
-const allowedOrigins = rawAllowedOrigin.split(',').map((o) => o.trim());
+// Strict exact-match CORS whitelist (no wildcards or insecure regex substrings)
+const explicitOrigins = [
+  process.env.CORS_ORIGIN,
+  process.env.CLIENT_URL,
+  'https://college-erp-frontend-lira.onrender.com',
+  'http://localhost:3000',
+  'http://localhost:5173',
+]
+  .flatMap((o) => (o ? o.split(',') : []))
+  .map((o) => o.trim())
+  .filter(Boolean);
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, or server-to-server)
-    if (
-      !origin ||
-      allowedOrigins.includes('*') ||
-      allowedOrigins.includes(origin) ||
-      origin.endsWith('.onrender.com') ||
-      origin.includes('localhost')
-    ) {
-      return callback(null, true);
-    }
-    return callback(new Error(`CORS blocked for origin: ${origin}`));
-  },
-  credentials: true,
-}));
+const allowedOriginsSet = new Set(explicitOrigins);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, or server-to-server)
+      if (!origin || allowedOriginsSet.has(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+  })
+);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestIdMiddleware);
 
-if (process.env.NODE_ENV === 'development') app.use(morgan('dev'));
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+} else {
+  app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
+}
 
 // Static files & rate limiting
 app.use('/uploads', express.static(path.resolve(__dirname, 'uploads'), { maxAge: '7d' }));
 app.use('/api', apiLimiter);
 
-// Health check endpoint
+// Health check endpoint (returns 503 if database is disconnected)
 app.get('/api/health', (req, res) => {
-  const ready = mongoose.connection.readyState === 1;
-  res.json({
-    status: ready ? 'online' : 'degraded',
-    database: ready ? 'connected' : 'disconnected',
+  const isDbConnected = mongoose.connection.readyState === 1;
+  const statusCode = isDbConnected ? 200 : 503;
+  res.status(statusCode).json({
+    status: isDbConnected ? 'online' : 'degraded',
+    database: isDbConnected ? 'connected' : 'disconnected',
     timestamp: new Date().toISOString(),
     system: 'College ERP Enterprise Backend API',
     version: '2.0.0',

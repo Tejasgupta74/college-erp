@@ -26,6 +26,10 @@ export const protect = async (req, res, next) => {
     if (!req.user.isActive) {
       return res.status(403).json({ success: false, message: 'Account has been deactivated. Please contact Administration.' });
     }
+    // Token revocation check (logout / password change invalidation)
+    if (decoded.tokenVersion !== undefined && (req.user.tokenVersion || 0) !== decoded.tokenVersion) {
+      return res.status(401).json({ success: false, message: 'Session has been invalidated. Please sign in again.' });
+    }
     return next();
   } catch {
     return res.status(401).json({ success: false, message: 'Not authorized, token invalid or expired' });

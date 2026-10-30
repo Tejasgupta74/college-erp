@@ -209,20 +209,39 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     assert.ok(Array.isArray(data.data));
   });
 
-  test('10. Direct Password Reset (No Tokens Generated/Required)', async () => {
-    // Reset password directly using email and new password
-    const res = await fetch(`${BASE_URL}/auth/reset-password`, {
+  test('10. Cryptographic Token Password Reset Flow & Account Takeover Prevention', async () => {
+    // 1. Request password reset token
+    const forgotRes = await fetch(`${BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'student@college.edu' }),
+    });
+    assert.equal(forgotRes.status, 200);
+    const forgotData = await forgotRes.json();
+    assert.ok(forgotData.success);
+    assert.ok(forgotData.resetToken, 'Non-production environment should supply reset token for testing');
+
+    // 2. Unauthenticated direct reset without token must fail
+    const directFailRes = await fetch(`${BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@college.edu', newPassword: 'HackedAdmin@123' }),
+    });
+    assert.equal(directFailRes.status, 400, 'Direct password reset without token must be blocked');
+
+    // 3. Reset password using valid cryptographic token
+    const resetRes = await fetch(`${BASE_URL}/auth/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'student@college.edu',
+        token: forgotData.resetToken,
         newPassword: 'Student@123',
       }),
     });
-    assert.equal(res.status, 200);
-    const data = await res.json();
-    assert.ok(data.success);
-    assert.match(data.message, /Password reset successfully/i);
+    assert.equal(resetRes.status, 200);
+    const resetData = await resetRes.json();
+    assert.ok(resetData.success);
+    assert.match(resetData.message, /Password reset successfully/i);
   });
 
   after(async () => {

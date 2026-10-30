@@ -9,33 +9,43 @@ export const getFaculty = async (req, res) => {
     const { department, search, page = 1, limit = 20 } = req.query;
     const query = department ? { department } : {};
 
-    let profiles = await FacultyProfile.find(query)
-      .populate('user', 'name email phone avatar isActive')
-      .populate('department', 'name code')
-      .sort({ createdAt: -1 });
+    if (search && search.trim()) {
+      const s = search.trim();
+      const matchingUsers = await User.find({
+        $or: [
+          { name: { $regex: s, $options: 'i' } },
+          { email: { $regex: s, $options: 'i' } },
+        ],
+      }).select('_id');
+      const userIds = matchingUsers.map((u) => u._id);
 
-    if (search) {
-      const s = search.toLowerCase();
-      profiles = profiles.filter((p) =>
-        p.user?.name?.toLowerCase().includes(s) ||
-        p.user?.email?.toLowerCase().includes(s) ||
-        p.employeeId?.toLowerCase().includes(s)
-      );
+      query.$or = [
+        { employeeId: { $regex: s, $options: 'i' } },
+        { user: { $in: userIds } },
+      ];
     }
 
-    const totalCount = profiles.length;
-    const pageNum = Math.max(1, parseInt(page, 10));
-    const limitNum = Math.max(1, parseInt(limit, 10));
-    const startIndex = (pageNum - 1) * limitNum;
-    const paginatedProfiles = profiles.slice(startIndex, startIndex + limitNum);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
+    const skip = (pageNum - 1) * limitNum;
+
+    const [profiles, totalCount] = await Promise.all([
+      FacultyProfile.find(query)
+        .populate('user', 'name email phone avatar isActive')
+        .populate('department', 'name code')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      FacultyProfile.countDocuments(query),
+    ]);
 
     res.json({
       success: true,
-      count: paginatedProfiles.length,
+      count: profiles.length,
       total: totalCount,
       page: pageNum,
       pages: Math.ceil(totalCount / limitNum),
-      data: paginatedProfiles,
+      data: profiles,
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
