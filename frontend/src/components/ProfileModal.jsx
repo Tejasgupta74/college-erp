@@ -4,7 +4,7 @@ import api from '../api/axios';
 import { X, User, Lock, Mail, Phone, Building2, GraduationCap, CheckCircle, AlertCircle, Shield, KeyRound } from 'lucide-react';
 
 export const ProfileModal = ({ isOpen, onClose }) => {
-  const { user } = useAuth();
+  const { user, updateToken } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
@@ -25,10 +25,20 @@ export const ProfileModal = ({ isOpen, onClose }) => {
 
     setLoading(true);
     try {
-      await api.put('/auth/change-password', {
+      const res = await api.put('/auth/change-password', {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword,
       });
+
+      // Synchronize newly returned JWT token with updated tokenVersion
+      if (res.data?.token) {
+        if (updateToken) {
+          updateToken(res.data.token);
+        } else {
+          localStorage.setItem('erp_token', res.data.token);
+        }
+      }
+
       setStatusMsg({ type: 'success', text: 'Password updated successfully!' });
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {

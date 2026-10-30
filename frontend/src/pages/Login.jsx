@@ -43,7 +43,11 @@ export const Login = () => {
       await login(email, password);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Invalid institutional credentials');
+      if (err.isHtmlResponse || (!err.response && !err.status)) {
+        setError('Backend server is spinning up (free tier cold start). Please wait ~30 seconds and try again.');
+      } else {
+        setError(err.response?.data?.message || err.message || 'Invalid institutional credentials');
+      }
     } finally {
       setLoading(false);
     }
@@ -120,7 +124,11 @@ export const Login = () => {
       await login(demoEmail, demoPass);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Quick login failed. Please verify credentials.');
+      if (err.isHtmlResponse || (!err.response && !err.status)) {
+        setError('Backend server is spinning up (free tier cold start). Please wait ~30 seconds and try again.');
+      } else {
+        setError(err.response?.data?.message || 'Quick login failed. Please verify credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -355,8 +363,8 @@ export const Login = () => {
             </form>
           )}
 
-          {/* Quick Demo Logins Section - strictly shown only in development mode */}
-          {!isForgot && import.meta.env.DEV && (
+          {/* Quick Demo Logins Section - accessible by default for evaluation unless explicitly hidden via VITE_HIDE_DEMO=true */}
+          {!isForgot && import.meta.env.VITE_HIDE_DEMO !== 'true' && (
             <div className="mt-8 pt-6 border-t border-slate-100">
               <p className="text-xs font-semibold text-slate-500 text-center uppercase tracking-wider mb-3">
                 ⚡ Demo 1-Click Access

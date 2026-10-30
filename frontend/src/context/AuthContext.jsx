@@ -28,6 +28,15 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  const updateToken = useCallback((newToken) => {
+    setToken(newToken);
+    if (newToken) {
+      localStorage.setItem('erp_token', newToken);
+    } else {
+      localStorage.removeItem('erp_token');
+    }
+  }, []);
+
   useEffect(() => {
     const checkAuth = async () => {
       if (localStorage.getItem('erp_token')) {
@@ -68,6 +77,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         login,
         logout,
+        updateToken,
       }}
     >
       {children}
