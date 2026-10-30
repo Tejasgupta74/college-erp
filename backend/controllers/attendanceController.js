@@ -3,6 +3,20 @@ import Course from '../models/Course.js';
 import StudentProfile from '../models/StudentProfile.js';
 import { recordAudit } from '../utils/audit.js';
 
+// Helper for strict YYYY-MM-DD date normalization independent of server timezone
+const parseDateString = (input) => {
+  if (!input) {
+    return new Date().toISOString().slice(0, 10);
+  }
+  if (typeof input === 'string') {
+    const match = input.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+};
+
 // Helper for date range normalization without mutation
 const getDayRange = (date) => {
   const sessionDate = date ? new Date(date) : new Date();
@@ -18,7 +32,18 @@ const getDayRange = (date) => {
 // @access  Private (Faculty or Admin)
 export const markAttendance = async (req, res) => {
   try {
-    const { courseId, departmentId, date, semester = 1, section = 'A', topicCovered = '', records } = req.body;
+    const {
+      courseId,
+      departmentId,
+      date,
+      semester = 1,
+      section = 'A',
+      sessionSlot = 1,
+      sessionType = 'Lecture',
+      topicCovered = '',
+      records,
+    } = req.body;
+
     if (!courseId || !departmentId || !Array.isArray(records) || records.length === 0) {
       return res.status(400).json({ success: false, message: 'Please provide course, department, and student records' });
     }
@@ -31,7 +56,9 @@ export const markAttendance = async (req, res) => {
     if (req.user.role === 'faculty' && course.faculty?.toString() !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'You can only mark attendance for your assigned courses' });
     }
-    if (date && Number.isNaN(new Date(date).getTime())) {
+
+    const dateStr = parseDateString(date);
+    if (!dateStr) {
       return res.status(400).json({ success: false, message: 'Invalid attendance date' });
     }
 
@@ -50,18 +77,40 @@ export const markAttendance = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Attendance includes students outside this course section' });
     }
 
+    const slotNum = Math.max(1, parseInt(sessionSlot, 10) || 1);
     const { sessionDate, startOfDay, endOfDay } = getDayRange(date);
-    let attendance = await Attendance.findOne({ course: courseId, section, date: { $gte: startOfDay, $lte: endOfDay } });
+
+    let attendance = await Attendance.findOne({
+      course: courseId,
+      section,
+      sessionSlot: slotNum,
+      $or: [
+        { dateString: dateStr },
+        { date: { $gte: startOfDay, $lte: endOfDay } },
+      ],
+    });
 
     if (attendance) {
       attendance.records = records;
       if (topicCovered) attendance.topicCovered = topicCovered;
+      if (sessionType) attendance.sessionType = sessionType;
+      attendance.sessionSlot = slotNum;
+      attendance.dateString = dateStr;
       attendance.faculty = req.user._id;
       await attendance.save();
     } else {
       attendance = await Attendance.create({
-        course: courseId, department: departmentId, faculty: req.user._id,
-        date: sessionDate, semester, section, topicCovered, records,
+        course: courseId,
+        department: departmentId,
+        faculty: req.user._id,
+        date: sessionDate,
+        dateString: dateStr,
+        semester,
+        section,
+        sessionSlot: slotNum,
+        sessionType,
+        topicCovered,
+        records,
       });
     }
 
@@ -71,7 +120,7 @@ export const markAttendance = async (req, res) => {
       resource: 'Attendance',
       resourceId: attendance._id,
       ip: req.ip,
-      details: { courseId, section, totalStudents: records.length },
+      details: { courseId, section, sessionSlot: slotNum, sessionType, totalStudents: records.length },
     });
 
     const populated = await Attendance.findById(attendance._id)
@@ -92,15 +141,20 @@ export const markAttendance = async (req, res) => {
 // @access  Private
 export const getAttendance = async (req, res) => {
   try {
-    const { courseId, date, semester, section } = req.query;
+    const { courseId, date, semester, section, sessionSlot } = req.query;
     const query = {};
     if (courseId) query.course = courseId;
     if (semester) query.semester = Number(semester);
     if (section) query.section = section;
+    if (sessionSlot) query.sessionSlot = Number(sessionSlot);
     if (date) {
-      if (Number.isNaN(new Date(date).getTime())) return res.status(400).json({ success: false, message: 'Invalid attendance date' });
+      const dateStr = parseDateString(date);
+      if (!dateStr) return res.status(400).json({ success: false, message: 'Invalid attendance date' });
       const { startOfDay, endOfDay } = getDayRange(date);
-      query.date = { $gte: startOfDay, $lte: endOfDay };
+      query.$or = [
+        { dateString: dateStr },
+        { date: { $gte: startOfDay, $lte: endOfDay } },
+      ];
     }
     if (req.user.role === 'faculty') {
       const assignedCourseIds = await Course.find({ faculty: req.user._id }).distinct('_id');

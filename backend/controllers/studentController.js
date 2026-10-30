@@ -11,7 +11,7 @@ const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const getStudents = async (req, res) => {
   try {
-    const { department, semester, section, search, page = 1, limit = 20 } = req.query;
+    const { department, semester, section, search, page = 1, limit = 20, all } = req.query;
     const query = {};
     if (department) query.department = department;
     if (semester) query.semester = Number(semester);
@@ -47,14 +47,32 @@ export const getStudents = async (req, res) => {
       }
     }
 
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
-    const skip = (pageNum - 1) * limitNum;
-
     let profileQuery = StudentProfile.find(query);
     if (req.user.role === 'faculty') {
       profileQuery = profileQuery.select('user enrollmentNo rollNo department semester section batchYear');
     }
+
+    // Support unpaginated export of all matching records (capped at safe 5000 max)
+    if (all === 'true') {
+      const allProfiles = await profileQuery
+        .populate('user', 'name email phone avatar isActive')
+        .populate('department', 'name code')
+        .sort({ rollNo: 1, enrollmentNo: 1 })
+        .limit(5000);
+
+      return res.json({
+        success: true,
+        count: allProfiles.length,
+        total: allProfiles.length,
+        page: 1,
+        pages: 1,
+        data: allProfiles,
+      });
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
+    const skip = (pageNum - 1) * limitNum;
 
     const [profiles, totalCount] = await Promise.all([
       profileQuery

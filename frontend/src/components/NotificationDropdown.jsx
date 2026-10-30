@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
-import { Bell, Clock, ArrowUpRight, Megaphone } from 'lucide-react';
+import { Bell, Clock, ArrowUpRight, Megaphone, CheckCheck } from 'lucide-react';
 
 export const NotificationDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -9,18 +9,31 @@ export const NotificationDropdown = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef(null);
 
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await api.get('/notifications');
+      setNotifications((res.data.data || []).slice(0, 5));
+      setUnreadCount(res.data.unreadCount || 0);
+    } catch (err) {
+      console.error('Failed to fetch notifications', err);
+    }
+  }, []);
+
+  // Poll for notifications every 30 seconds for real-time alerts
   useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const res = await api.get('/notifications');
-        setNotifications((res.data.data || []).slice(0, 5));
-        setUnreadCount(res.data.unreadCount || 0);
-      } catch (err) {
-        console.error('Failed to fetch notifications', err);
-      }
-    };
     fetchNotifications();
-  }, [isOpen]);
+    const interval = setInterval(() => {
+      fetchNotifications();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  // Also refetch when dropdown opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchNotifications();
+    }
+  }, [isOpen, fetchNotifications]);
 
   const markRead = async (notification) => {
     if (notification.isRead) return;
@@ -30,6 +43,17 @@ export const NotificationDropdown = () => {
       setUnreadCount((count) => Math.max(0, count - 1));
     } catch (err) {
       console.error('Failed to mark notification as read', err);
+    }
+  };
+
+  const markAllRead = async () => {
+    if (unreadCount === 0) return;
+    try {
+      await api.put('/notifications/read-all');
+      setNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error('Failed to mark all notifications as read', err);
     }
   };
 
@@ -65,13 +89,25 @@ export const NotificationDropdown = () => {
               <Megaphone className="w-4 h-4 text-indigo-600" />
               <h3 className="font-bold text-xs uppercase tracking-wider text-slate-800">Campus Alerts</h3>
             </div>
-            <Link
-              to="/notices"
-              onClick={() => setIsOpen(false)}
-              className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5"
-            >
-              View All <ArrowUpRight className="w-3 h-3" />
-            </Link>
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  className="text-[11px] font-semibold text-slate-600 hover:text-indigo-600 flex items-center gap-1 transition-colors"
+                  title="Mark all notifications as read"
+                >
+                  <CheckCheck className="w-3.5 h-3.5 text-indigo-600" /> Mark all read
+                </button>
+              )}
+              <Link
+                to="/notices"
+                onClick={() => setIsOpen(false)}
+                className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 ml-1"
+              >
+                View All <ArrowUpRight className="w-3 h-3" />
+              </Link>
+            </div>
           </div>
 
           {/* List */}

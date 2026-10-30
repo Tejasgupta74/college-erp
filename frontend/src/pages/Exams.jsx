@@ -39,9 +39,11 @@ export const Exams = () => {
   const [activeExamForMarks, setActiveExamForMarks] = useState(null);
   const [marksEntries, setMarksEntries] = useState([]); // [{ studentId, name, rollNo, marksObtained, remarks }]
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
+  const [fetchError, setFetchError] = useState(null);
 
   const fetchData = async (signal) => {
     setLoading(true);
+    setFetchError(null);
     try {
       if (isStudent) {
         const res = await api.get(`/exams/report-card/${user._id}`, { signal });
@@ -65,7 +67,7 @@ export const Exams = () => {
     } catch (err) {
       if (err.code !== 'ERR_CANCELED') {
         console.error(err);
-        setStatusMsg({ type: 'error', text: 'Failed to load examinations.' });
+        setFetchError('Failed to load examinations or grade reports. Please retry.');
       }
     } finally {
       if (!signal?.aborted) setLoading(false);
@@ -165,6 +167,22 @@ export const Exams = () => {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Academic Grade Card</h1>
           <p className="text-sm text-slate-500 mt-1">Official semester transcripts, course grades, and evaluation records</p>
         </div>
+
+        {fetchError && (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 text-xs font-semibold">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{fetchError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => fetchData()}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex items-center justify-between">
@@ -285,6 +303,22 @@ export const Exams = () => {
         >
           {statusMsg.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           {statusMsg.text}
+        </div>
+      )}
+
+      {fetchError && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 text-xs font-semibold">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{fetchError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => fetchData()}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0"
+          >
+            Retry
+          </button>
         </div>
       )}
 

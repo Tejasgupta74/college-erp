@@ -24,6 +24,7 @@ export const Students = () => {
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedSem, setSelectedSem] = useState('');
   const [page, setPage] = useState(1);
@@ -33,12 +34,23 @@ export const Students = () => {
   const [showDossierModal, setShowDossierModal] = useState(false);
   const [formData, setFormData] = useState(initialStudentForm);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
+  const [fetchError, setFetchError] = useState(null);
+  const [exporting, setExporting] = useState(false);
+
+  // 300ms debounce for search input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [search]);
 
   const fetchStudents = async (signal) => {
     setLoading(true);
+    setFetchError(null);
     try {
       let url = `/students?page=${page}&limit=20&`;
-      if (search) url += `search=${encodeURIComponent(search)}&`;
+      if (debouncedSearch.trim()) url += `search=${encodeURIComponent(debouncedSearch.trim())}&`;
       if (selectedDept) url += `department=${selectedDept}&`;
       if (selectedSem) url += `semester=${selectedSem}&`;
 
@@ -57,7 +69,7 @@ export const Students = () => {
     } catch (err) {
       if (err.code !== 'ERR_CANCELED') {
         console.error(err);
-        setStatusMsg({ type: 'error', text: 'Failed to load students directory.' });
+        setFetchError('Failed to load students directory. Please verify connection and try again.');
       }
     } finally {
       if (!signal?.aborted) setLoading(false);
@@ -66,13 +78,13 @@ export const Students = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [search, selectedDept, selectedSem]);
+  }, [debouncedSearch, selectedDept, selectedSem]);
 
   useEffect(() => {
     const controller = new AbortController();
     fetchStudents(controller.signal);
     return () => controller.abort();
-  }, [page, search, selectedDept, selectedSem]);
+  }, [page, debouncedSearch, selectedDept, selectedSem]);
 
   useEffect(() => {
     if (!statusMsg.text) return;
@@ -93,27 +105,46 @@ export const Students = () => {
     }
   };
 
-  const handleExportData = (format) => {
-    if (!students.length) return;
-    const formattedData = students.map((s, idx) => ({
-      'S.No': idx + 1,
-      'Name': s.user?.name || 'N/A',
-      'Roll Number': s.rollNo || 'N/A',
-      'Enrollment': s.enrollmentNo || 'N/A',
-      'Department': s.department?.name || 'N/A',
-      'Semester': s.semester || 'N/A',
-      'Section': s.section || 'A',
-      'Email': s.user?.email || 'N/A',
-      'Phone': s.user?.phone || 'N/A',
-      'Batch Year': s.batchYear || 'N/A',
-      'Guardian Name': s.guardianName || 'N/A',
-    }));
+  const handleExportData = async (format) => {
+    setExporting(true);
+    try {
+      let url = `/students?all=true&`;
+      if (debouncedSearch.trim()) url += `search=${encodeURIComponent(debouncedSearch.trim())}&`;
+      if (selectedDept) url += `department=${selectedDept}&`;
+      if (selectedSem) url += `semester=${selectedSem}&`;
 
-    const filename = `Students_Export_${new Date().toISOString().slice(0, 10)}`;
-    if (format === 'csv') {
-      exportToCSV(formattedData, filename);
-    } else {
-      exportToExcel(formattedData, filename, 'Students Directory');
+      const res = await api.get(url);
+      const records = res.data.data || [];
+      if (!records.length) {
+        setStatusMsg({ type: 'error', text: 'No student records available to export.' });
+        return;
+      }
+
+      const formattedData = records.map((s, idx) => ({
+        'S.No': idx + 1,
+        'Name': s.user?.name || 'N/A',
+        'Roll Number': s.rollNo || 'N/A',
+        'Enrollment': s.enrollmentNo || 'N/A',
+        'Department': s.department?.name || 'N/A',
+        'Semester': s.semester || 'N/A',
+        'Section': s.section || 'A',
+        'Email': s.user?.email || 'N/A',
+        'Phone': s.user?.phone || 'N/A',
+        'Batch Year': s.batchYear || 'N/A',
+        'Guardian Name': s.guardianName || 'N/A',
+      }));
+
+      const filename = `Students_Export_${new Date().toISOString().slice(0, 10)}`;
+      if (format === 'csv') {
+        exportToCSV(formattedData, filename);
+      } else {
+        exportToExcel(formattedData, filename, 'Students Directory');
+      }
+    } catch (err) {
+      console.error(err);
+      setStatusMsg({ type: 'error', text: 'Export failed. Could not fetch all student records.' });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -129,17 +160,17 @@ export const Students = () => {
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => handleExportData('xlsx')}
-            disabled={!students.length}
+            disabled={exporting || loading || pagination.total === 0}
             className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-xl text-xs shadow-sm transition-colors disabled:opacity-50"
-            title="Export as Excel"
+            title="Export all matching students as Excel"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5" /> Export Excel
+            <FileSpreadsheet className="w-3.5 h-3.5" /> {exporting ? 'Exporting...' : 'Export Excel'}
           </button>
           <button
             onClick={() => handleExportData('csv')}
-            disabled={!students.length}
+            disabled={exporting || loading || pagination.total === 0}
             className="inline-flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white font-semibold px-3 py-2 rounded-xl text-xs shadow-sm transition-colors disabled:opacity-50"
-            title="Export as CSV"
+            title="Export all matching students as CSV"
           >
             <Download className="w-3.5 h-3.5" /> CSV
           </button>
@@ -163,6 +194,22 @@ export const Students = () => {
         >
           {statusMsg.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           {statusMsg.text}
+        </div>
+      )}
+
+      {fetchError && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 text-xs font-semibold">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{fetchError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => fetchStudents()}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0"
+          >
+            Retry
+          </button>
         </div>
       )}
 

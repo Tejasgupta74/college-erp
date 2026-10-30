@@ -21,6 +21,7 @@ export const CommandSearch = ({ isOpen, onClose }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
+  const [cachedCourses, setCachedCourses] = useState([]);
   const [courses, setCourses] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -28,6 +29,8 @@ export const CommandSearch = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (!isOpen) {
       setQuery('');
+      setCourses([]);
+      setStudents([]);
       return;
     }
 
@@ -35,8 +38,18 @@ export const CommandSearch = ({ isOpen, onClose }) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
+
+    // Pre-cache courses once on opening if permitted (zero network calls on keystrokes)
+    if (['admin', 'faculty', 'student'].includes(user?.role)) {
+      api.get('/academics/courses')
+        .then((res) => setCachedCourses(res.data.data || []))
+        .catch((err) => console.error('Failed to cache courses for quick search', err));
+    } else {
+      setCachedCourses([]);
+    }
+
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, user?.role]);
 
   useEffect(() => {
     if (!query.trim() || query.length < 2) {
@@ -48,21 +61,18 @@ export const CommandSearch = ({ isOpen, onClose }) => {
     const timeout = setTimeout(async () => {
       setLoading(true);
       try {
-        const [courseRes, studentRes] = await Promise.all([
-          api.get('/academics/courses'),
-          user?.role === 'admin' || user?.role === 'faculty'
-            ? api.get(`/students?search=${encodeURIComponent(query)}`)
-            : Promise.resolve({ data: { data: [] } }),
-        ]);
-
-        const filteredCourses = (courseRes.data.data || []).filter(
-          (c) =>
-            c.name?.toLowerCase().includes(query.toLowerCase()) ||
-            c.code?.toLowerCase().includes(query.toLowerCase())
+        const q = query.toLowerCase();
+        const filteredCourses = cachedCourses.filter(
+          (c) => c.name?.toLowerCase().includes(q) || c.code?.toLowerCase().includes(q)
         );
-
         setCourses(filteredCourses.slice(0, 4));
-        setStudents((studentRes.data.data || []).slice(0, 4));
+
+        if (['admin', 'faculty', 'accountant'].includes(user?.role)) {
+          const studentRes = await api.get(`/students?search=${encodeURIComponent(query.trim())}&limit=4`);
+          setStudents((studentRes.data.data || []).slice(0, 4));
+        } else {
+          setStudents([]);
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -71,26 +81,24 @@ export const CommandSearch = ({ isOpen, onClose }) => {
     }, 200);
 
     return () => clearTimeout(timeout);
-  }, [query, user]);
+  }, [query, cachedCourses, user]);
 
   if (!isOpen) return null;
 
-  const quickNav = [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Courses & Syllabus', path: '/courses', icon: BookOpen },
-    { label: 'Attendance Portal', path: '/attendance', icon: CalendarCheck2 },
-    { label: 'Fees & Invoices', path: '/fees', icon: CreditCard },
-    { label: 'Examinations', path: '/exams', icon: Award },
-    { label: 'Campus Notices', path: '/notices', icon: Bell },
+  const role = user?.role;
+  const allNavItems = [
+    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'faculty', 'student', 'accountant'] },
+    { label: 'Courses & Syllabus', path: '/courses', icon: BookOpen, roles: ['admin', 'faculty', 'student'] },
+    { label: 'Attendance Portal', path: '/attendance', icon: CalendarCheck2, roles: ['admin', 'faculty', 'student'] },
+    { label: 'Fees & Invoices', path: '/fees', icon: CreditCard, roles: ['admin', 'accountant', 'student'] },
+    { label: 'Examinations', path: '/exams', icon: Award, roles: ['admin', 'faculty', 'student'] },
+    { label: 'Campus Notices', path: '/notices', icon: Bell, roles: ['admin', 'faculty', 'student', 'accountant'] },
+    { label: 'Student Directory', path: '/students', icon: Users, roles: ['admin', 'faculty', 'accountant'] },
+    { label: 'Departments', path: '/departments', icon: Building2, roles: ['admin'] },
+    { label: 'Faculty Members', path: '/faculty', icon: ShieldCheck, roles: ['admin'] },
   ];
 
-  if (user?.role === 'admin') {
-    quickNav.push(
-      { label: 'Departments', path: '/departments', icon: Building2 },
-      { label: 'Student Directory', path: '/students', icon: Users },
-      { label: 'Faculty Members', path: '/faculty', icon: ShieldCheck }
-    );
-  }
+  const quickNav = allNavItems.filter((item) => item.roles.includes(role));
 
   const handleSelect = (path) => {
     navigate(path);

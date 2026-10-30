@@ -1,25 +1,26 @@
 import { X, Printer, GraduationCap, Download } from 'lucide-react';
-import { exportFeeReceiptPDF } from '../utils/exportUtils';
+import { exportFeeReceiptPDF, INSTITUTION_CONFIG } from '../utils/exportUtils';
 
 export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
   if (!isOpen || !fee) return null;
 
   const handlePrint = () => window.print();
   const handleDownloadPDF = () => {
-    exportFeeReceiptPDF({
-      ...fee,
-      amount: fee.paidAmount,
-      breakdown: {
-        [fee.title || 'Tuition & Academic Fees']: fee.paidAmount,
-      },
-    });
+    exportFeeReceiptPDF(fee);
   };
 
-  const latestPayment = fee.payments && fee.payments.length > 0 ? fee.payments[fee.payments.length - 1] : null;
-  const receiptNo = latestPayment?.receiptNo || `REC-${fee._id?.toString()?.slice(-6)?.toUpperCase() || '000000'}`;
-  const transactionId = latestPayment?.transactionId || `TXN-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-  const paymentDate = latestPayment?.date ? new Date(latestPayment.date).toLocaleDateString() : new Date().toLocaleDateString();
-  const paymentMethod = latestPayment?.method || 'Online';
+  const payments = Array.isArray(fee.payments) ? fee.payments : [];
+  const latestPayment = payments.length > 0 ? payments[payments.length - 1] : null;
+  const receiptNo = latestPayment?.receiptNo || fee.receiptNo || (fee._id ? `REC-${fee._id.toString().slice(-6).toUpperCase()}` : 'N/A');
+  const transactionId = latestPayment?.transactionId || fee.transactionId || 'N/A';
+  const paymentDate = latestPayment?.date
+    ? new Date(latestPayment.date).toLocaleDateString()
+    : (fee.paymentDate ? new Date(fee.paymentDate).toLocaleDateString() : 'N/A');
+  const paymentMethod = latestPayment?.method || fee.paymentMethod || 'N/A';
+
+  const totalAmount = Number(fee.totalAmount || fee.amount || 0);
+  const paidAmount = Number(fee.paidAmount || (fee.status === 'Paid' ? totalAmount : 0));
+  const remainingDue = Math.max(0, totalAmount - paidAmount);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
@@ -56,8 +57,8 @@ export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
               </div>
               <div>
                 <h2 className="font-extrabold text-lg text-slate-900 tracking-tight leading-none">College ERP System</h2>
-                <p className="text-[11px] text-slate-500 mt-1 font-medium">Affiliated to State Technical University • Accredited 'A+' Grade</p>
-                <p className="text-[10px] text-slate-400">Campus: Knowledge City, Tech Zone 4 • finance@college.edu</p>
+                <p className="text-[11px] text-slate-500 mt-1 font-medium">{INSTITUTION_CONFIG.location}</p>
+                <p className="text-[10px] text-slate-400">{INSTITUTION_CONFIG.campus}</p>
               </div>
             </div>
             <div className="text-right">
@@ -72,15 +73,18 @@ export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
           <div className="grid grid-cols-2 gap-4 text-xs">
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase">Billed To (Student)</span>
-              <p className="font-bold text-slate-900 text-sm">{fee.student?.name || 'Student Name'}</p>
-              <p className="text-slate-500 font-medium">Department: {fee.department?.name || 'Academic Dept'}</p>
-              <p className="text-slate-500 font-medium">Semester {fee.semester} • Academic Year {fee.academicYear}</p>
+              <p className="font-bold text-slate-900 text-sm">{fee.student?.name || 'N/A'}</p>
+              <p className="text-slate-500 font-medium">Department: {fee.department?.name || fee.student?.department?.name || 'N/A'}</p>
+              <p className="text-slate-500 font-medium">
+                {fee.semester ? `Semester ${fee.semester}` : ''}
+                {fee.academicYear ? ` • Academic Year ${fee.academicYear}` : ''}
+              </p>
             </div>
 
             <div className="space-y-1 text-right">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Payment Summary</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Latest Payment Summary</span>
               <p className="text-slate-600">Date: <strong className="text-slate-900">{paymentDate}</strong></p>
-              <p className="text-slate-600">Method: <strong className="text-slate-900">{paymentMethod}</strong></p>
+              <p className="text-slate-600">Method: <strong className="text-slate-900">{paymentMethod.toUpperCase()}</strong></p>
               <p className="text-slate-600 font-mono text-[11px]">Txn ID: {transactionId}</p>
             </div>
           </div>
@@ -97,35 +101,70 @@ export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 <tr>
-                  <td className="py-3 px-4 font-semibold text-slate-800">{fee.title}</td>
-                  <td className="py-3 px-4 text-right font-medium text-slate-600">₹{fee.totalAmount?.toLocaleString()}</td>
-                  <td className="py-3 px-4 text-right font-bold text-emerald-600">₹{fee.paidAmount?.toLocaleString()}</td>
+                  <td className="py-3 px-4 font-semibold text-slate-800">{fee.title || 'Tuition & Academic Fees'}</td>
+                  <td className="py-3 px-4 text-right font-medium text-slate-600">₹{totalAmount.toLocaleString()}</td>
+                  <td className="py-3 px-4 text-right font-bold text-emerald-600">₹{paidAmount.toLocaleString()}</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
+          {/* Installment History Table (if multiple / partial payments exist) */}
+          {payments.length > 0 && (
+            <div className="space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Payment Installment Breakdown ({payments.length} Recorded)
+              </span>
+              <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-600 font-bold uppercase text-[9px] border-b border-slate-200">
+                      <th className="py-2 px-3">#</th>
+                      <th className="py-2 px-3">Receipt No</th>
+                      <th className="py-2 px-3">Txn ID</th>
+                      <th className="py-2 px-3">Date</th>
+                      <th className="py-2 px-3">Method</th>
+                      <th className="py-2 px-3 text-right">Amount (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-[11px]">
+                    {payments.map((p, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className="py-2 px-3 font-semibold text-slate-500">#{idx + 1}</td>
+                        <td className="py-2 px-3 font-mono font-medium text-slate-700">{p.receiptNo || 'N/A'}</td>
+                        <td className="py-2 px-3 font-mono text-slate-500">{p.transactionId || 'N/A'}</td>
+                        <td className="py-2 px-3 text-slate-600">{p.date ? new Date(p.date).toLocaleDateString() : 'N/A'}</td>
+                        <td className="py-2 px-3 font-medium text-slate-600">{(p.method || 'N/A').toUpperCase()}</td>
+                        <td className="py-2 px-3 text-right font-bold text-emerald-600">₹{Number(p.amount || 0).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Totals & Outstanding */}
           <div className="p-4 bg-slate-50 rounded-2xl flex items-center justify-between text-xs">
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Remaining Balance</span>
-              <span className={`font-bold text-sm ${fee.totalAmount - fee.paidAmount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                {fee.totalAmount - fee.paidAmount > 0
-                  ? `₹${(fee.totalAmount - fee.paidAmount).toLocaleString()} (Due)`
+              <span className={`font-bold text-sm ${remainingDue > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {remainingDue > 0
+                  ? `₹${remainingDue.toLocaleString()} (Due)`
                   : '₹0.00 (Fully Settled)'}
               </span>
             </div>
             <div className="text-right">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Settled Now</span>
-              <span className="font-extrabold text-lg text-indigo-700">₹{fee.paidAmount?.toLocaleString()}</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Settled</span>
+              <span className="font-extrabold text-lg text-indigo-700">₹{paidAmount.toLocaleString()}</span>
             </div>
           </div>
 
           {/* Stamp & Signatures */}
           <div className="pt-8 flex items-end justify-between border-t border-slate-100 text-[11px] text-slate-400">
             <div>
-              <p className="font-medium text-slate-500">System generated electronic receipt.</p>
-              <p className="text-[10px]">No physical signature required for institutional verification.</p>
+              <p className="font-medium text-slate-500">{INSTITUTION_CONFIG.footerAuth}</p>
+              <p className="text-[10px]">Issued by institutional finance portal.</p>
             </div>
             <div className="text-center">
               <div className="w-28 border-b border-slate-300 pb-1 mb-1 font-serif text-slate-700 italic font-bold">Finance Officer</div>

@@ -1,3 +1,11 @@
+export const INSTITUTION_CONFIG = {
+  name: 'COLLEGE ERP SYSTEM',
+  location: 'Accredited Institutional ERP System • Punjab, India',
+  campus: 'Knowledge Campus, Punjab, India • finance@college.edu',
+  accreditation: "Affiliated to State Technical University • Accredited Grade 'A+'",
+  footerAuth: 'Official Institutional Document • System-Generated Electronic Record',
+};
+
 /**
  * Institutional Header for College ERP Documents
  */
@@ -8,12 +16,12 @@ const addInstitutionalHeader = (doc, title, subtitle = '') => {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.setTextColor(255, 255, 255);
-  doc.text('COLLEGE ERP SYSTEM', 14, 11);
+  doc.text(INSTITUTION_CONFIG.name, 14, 11);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(224, 231, 255);
-  doc.text('Accredited Institutional ERP System • New Delhi, India', 14, 18);
+  doc.text(INSTITUTION_CONFIG.location, 14, 18);
 
   // Document Title Banner
   doc.setFont('helvetica', 'bold');
@@ -50,7 +58,7 @@ const addInstitutionalFooter = (doc) => {
   doc.setTextColor(148, 163, 184);
   const dateStr = new Date().toLocaleString();
   doc.text(`Generated: ${dateStr} • College ERP System`, 14, pageHeight - 10);
-  doc.text('Official Institutional Document • Valid without physical signature', pageWidth - 14, pageHeight - 10, { align: 'right' });
+  doc.text(INSTITUTION_CONFIG.footerAuth, pageWidth - 14, pageHeight - 10, { align: 'right' });
 };
 
 /**
@@ -61,15 +69,22 @@ export const exportFeeReceiptPDF = async (fee) => {
   const { default: autoTable } = await import('jspdf-autotable');
 
   const doc = new jsPDF();
-  const receiptNo = fee.receiptNo || `REC-${fee._id.toString().slice(-8).toUpperCase()}`;
+  const latestPayment = Array.isArray(fee.payments) && fee.payments.length > 0
+    ? fee.payments[fee.payments.length - 1]
+    : null;
+
+  const receiptNo = latestPayment?.receiptNo || fee.receiptNo || (fee._id ? `REC-${fee._id.toString().slice(-6).toUpperCase()}` : 'N/A');
 
   addInstitutionalHeader(doc, 'Official Fee Payment Receipt', `Receipt No: ${receiptNo}`);
 
   // Metadata Grid
   const studentName = fee.student?.name || 'N/A';
   const enrollmentNo = fee.student?.enrollmentNo || fee.student?.rollNo || 'N/A';
-  const deptName = fee.student?.department?.name || 'N/A';
-  const paymentDate = new Date(fee.paymentDate || fee.createdAt || Date.now()).toLocaleDateString();
+  const deptName = fee.student?.department?.name || fee.department?.name || 'N/A';
+  const paymentDate = latestPayment?.date
+    ? new Date(latestPayment.date).toLocaleDateString()
+    : (fee.paymentDate ? new Date(fee.paymentDate).toLocaleDateString() : 'N/A');
+  const paymentMethod = (latestPayment?.method || fee.paymentMethod || 'N/A').toUpperCase();
 
   autoTable(doc, {
     startY: 48,
@@ -84,38 +99,52 @@ export const exportFeeReceiptPDF = async (fee) => {
     body: [
       ['Student Name:', studentName, 'Enrollment No:', enrollmentNo],
       ['Department:', deptName, 'Semester:', fee.semester ? `Semester ${fee.semester}` : 'N/A'],
-      ['Payment Method:', (fee.paymentMethod || 'Online').toUpperCase(), 'Payment Date:', paymentDate],
-      ['Academic Year:', fee.academicYear || '2024-2025', 'Status:', (fee.status || 'PAID').toUpperCase()],
+      ['Payment Method:', paymentMethod, 'Payment Date:', paymentDate],
+      ['Academic Year:', fee.academicYear || '', 'Status:', (fee.status || '').toUpperCase()],
     ],
   });
 
-  // Financial Breakdown Table
-  const breakdownRows = [];
-  if (fee.breakdown && typeof fee.breakdown === 'object') {
-    Object.entries(fee.breakdown).forEach(([key, val]) => {
-      const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-      breakdownRows.push([formattedKey, `Rs. ${Number(val || 0).toLocaleString()}`]);
-    });
-  }
-
-  if (breakdownRows.length === 0) {
-    breakdownRows.push(['Tuition Fee', `Rs. ${Number(fee.amount || fee.totalAmount || 0).toLocaleString()}`]);
-  }
+  // Financial Breakdown & Summary Table
+  const totalAmount = Number(fee.totalAmount || fee.amount || 0);
+  const paidAmount = Number(fee.paidAmount || (fee.status === 'Paid' ? totalAmount : 0));
+  const remainingDue = Math.max(0, totalAmount - paidAmount);
 
   autoTable(doc, {
-    startY: doc.lastAutoTable.finalY + 8,
-    head: [['Fee Head / Component', 'Amount (INR)']],
+    startY: doc.lastAutoTable.finalY + 6,
+    head: [['Fee Head / Description', 'Total Billed (INR)', 'Total Settled (INR)', 'Remaining Balance (INR)']],
     body: [
-      ...breakdownRows,
       [
-        { content: 'Total Paid Amount', styles: { fontStyle: 'bold', fillColor: [248, 250, 252] } },
-        { content: `Rs. ${Number(fee.amount || fee.paidAmount || fee.totalAmount || 0).toLocaleString()}`, styles: { fontStyle: 'bold', fillColor: [248, 250, 252], textColor: [79, 70, 229] } },
+        fee.title || 'Tuition & Academic Fees',
+        `Rs. ${totalAmount.toLocaleString()}`,
+        `Rs. ${paidAmount.toLocaleString()}`,
+        `Rs. ${remainingDue.toLocaleString()}`,
       ],
     ],
     theme: 'striped',
     headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
     styles: { fontSize: 9, cellPadding: 3.5 },
   });
+
+  // Full Installment Payment History Table
+  if (Array.isArray(fee.payments) && fee.payments.length > 0) {
+    const paymentRows = fee.payments.map((p, idx) => [
+      `#${idx + 1}`,
+      p.receiptNo || 'N/A',
+      p.transactionId || 'N/A',
+      p.date ? new Date(p.date).toLocaleDateString() : 'N/A',
+      (p.method || 'N/A').toUpperCase(),
+      `Rs. ${Number(p.amount || 0).toLocaleString()}`,
+    ]);
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 8,
+      head: [['Installment', 'Receipt No', 'Transaction ID', 'Date', 'Method', 'Amount (INR)']],
+      body: paymentRows,
+      theme: 'grid',
+      headStyles: { fillColor: [51, 65, 85], textColor: [255, 255, 255], fontStyle: 'bold' },
+      styles: { fontSize: 8.5, cellPadding: 2.5 },
+    });
+  }
 
   addInstitutionalFooter(doc);
   doc.save(`Fee_Receipt_${receiptNo}.pdf`);
@@ -129,7 +158,11 @@ export const exportMarksheetPDF = async (exam, student, results) => {
   const { default: autoTable } = await import('jspdf-autotable');
 
   const doc = new jsPDF();
-  addInstitutionalHeader(doc, 'Institutional Grade Sheet / Marksheet', `${exam.name || 'End Semester Examination'} • ${exam.academicYear || '2024-2025'}`);
+  addInstitutionalHeader(
+    doc,
+    'Institutional Grade Sheet / Marksheet',
+    `${exam.name || 'End Semester Examination'}${exam.academicYear ? ' • ' + exam.academicYear : ''}`
+  );
 
   autoTable(doc, {
     startY: 48,

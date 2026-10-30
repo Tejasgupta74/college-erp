@@ -22,51 +22,60 @@ export const Attendance = () => {
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState('');
   const [selectedSection, setSelectedSection] = useState('A');
+  const [sessionSlot, setSessionSlot] = useState(1);
+  const [sessionType, setSessionType] = useState('Lecture');
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [topicCovered, setTopicCovered] = useState('');
   const [students, setStudents] = useState([]);
   const [records, setRecords] = useState({}); // { [studentUserId]: 'Present' | 'Absent' | 'Late' }
   const [loading, setLoading] = useState(true);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
+  const [fetchError, setFetchError] = useState(null);
 
   // State for student view
   const [studentSummary, setStudentSummary] = useState(null);
 
+  const fetchStudentSummary = async (signal) => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const res = await api.get(`/attendance/student/${user._id}`, { signal });
+      setStudentSummary(res.data.data);
+    } catch (err) {
+      if (err.code !== 'ERR_CANCELED') {
+        console.error(err);
+        setFetchError('Failed to load your attendance summary. Please retry.');
+      }
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  };
+
+  const fetchFacultyCourses = async (signal) => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const url = user?.role === 'faculty' ? `/academics/courses?faculty=${user._id}` : '/academics/courses';
+      const res = await api.get(url, { signal });
+      const courseList = res.data.data || [];
+      setCourses(courseList);
+      if (courseList.length > 0) setSelectedCourse(courseList[0]._id);
+    } catch (err) {
+      if (err.code !== 'ERR_CANCELED') {
+        console.error(err);
+        setFetchError('Failed to load assigned courses. Please retry.');
+      }
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const controller = new AbortController();
     if (isStudent) {
-      const fetchStudentSummary = async () => {
-        try {
-          const res = await api.get(`/attendance/student/${user._id}`, { signal: controller.signal });
-          setStudentSummary(res.data.data);
-        } catch (err) {
-          if (err.code !== 'ERR_CANCELED') {
-            console.error(err);
-            setStatusMsg({ type: 'error', text: 'Failed to load attendance summary.' });
-          }
-        } finally {
-          if (!controller.signal.aborted) setLoading(false);
-        }
-      };
-      fetchStudentSummary();
+      fetchStudentSummary(controller.signal);
     } else {
-      const fetchCourses = async () => {
-        try {
-          const url = user?.role === 'faculty' ? `/academics/courses?faculty=${user._id}` : '/academics/courses';
-          const res = await api.get(url, { signal: controller.signal });
-          const courseList = res.data.data || [];
-          setCourses(courseList);
-          if (courseList.length > 0) setSelectedCourse(courseList[0]._id);
-        } catch (err) {
-          if (err.code !== 'ERR_CANCELED') {
-            console.error(err);
-            setStatusMsg({ type: 'error', text: 'Failed to load assigned courses.' });
-          }
-        } finally {
-          if (!controller.signal.aborted) setLoading(false);
-        }
-      };
-      fetchCourses();
+      fetchFacultyCourses(controller.signal);
     }
     return () => controller.abort();
   }, [user, isStudent]);
@@ -78,13 +87,14 @@ export const Attendance = () => {
     return () => clearTimeout(timer);
   }, [statusMsg]);
 
-  // When selectedCourse or selectedSection or attendanceDate changes, fetch full student roster & saved records
+  // When selectedCourse or selectedSection or attendanceDate or sessionSlot changes, fetch full student roster & saved records
   useEffect(() => {
     if (!isStudent && selectedCourse) {
       const controller = new AbortController();
       const courseObj = courses.find((c) => c._id === selectedCourse);
       if (courseObj) {
         const fetchStudentsForCourse = async () => {
+          setFetchError(null);
           try {
             const departmentId = courseObj.department?._id || courseObj.department;
             const [studentsRes, attendanceRes] = await Promise.all([
@@ -93,7 +103,7 @@ export const Attendance = () => {
                 { signal: controller.signal }
               ),
               api.get(
-                `/attendance?courseId=${selectedCourse}&date=${attendanceDate}&section=${selectedSection}`,
+                `/attendance?courseId=${selectedCourse}&date=${attendanceDate}&section=${selectedSection}&sessionSlot=${sessionSlot}`,
                 { signal: controller.signal }
               ),
             ]);
@@ -102,6 +112,9 @@ export const Attendance = () => {
             setStudents(studentList);
 
             const existing = attendanceRes.data.data?.[0];
+            if (existing?.topicCovered) setTopicCovered(existing.topicCovered);
+            if (existing?.sessionType) setSessionType(existing.sessionType);
+
             const savedRecords = new Map(
               (existing?.records || []).map((record) => [String(record.student?._id || record.student), record.status])
             );
@@ -116,7 +129,7 @@ export const Attendance = () => {
           } catch (err) {
             if (err.code !== 'ERR_CANCELED') {
               console.error(err);
-              setStatusMsg({ type: 'error', text: 'Failed to load students roster or attendance records.' });
+              setFetchError('Failed to load students roster or attendance records. Please retry.');
             }
           }
         };
@@ -124,7 +137,7 @@ export const Attendance = () => {
       }
       return () => controller.abort();
     }
-  }, [selectedCourse, selectedSection, courses, isStudent, attendanceDate]);
+  }, [selectedCourse, selectedSection, sessionSlot, courses, isStudent, attendanceDate]);
 
   const handleStatusChange = (studentUserId, status) => {
     setRecords((prev) => ({ ...prev, [studentUserId]: status }));
@@ -154,12 +167,14 @@ export const Attendance = () => {
         departmentId: courseObj?.department?._id || courseObj?.department,
         semester: courseObj?.semester,
         section: selectedSection,
+        sessionSlot: Number(sessionSlot),
+        sessionType,
         date: attendanceDate,
         topicCovered,
         records: recordPayload,
       });
 
-      setStatusMsg({ type: 'success', text: `Attendance for ${courseObj?.name || 'course'} recorded successfully!` });
+      setStatusMsg({ type: 'success', text: `Attendance for ${courseObj?.name || 'course'} (Period ${sessionSlot}) recorded successfully!` });
     } catch (err) {
       setStatusMsg({ type: 'error', text: err.response?.data?.message || 'Failed to submit attendance' });
     }
@@ -210,6 +225,22 @@ export const Attendance = () => {
             </button>
           </div>
         </div>
+
+        {fetchError && (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 text-xs font-semibold">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{fetchError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => fetchStudentSummary()}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         {studentSummary?.isShortage && (
           <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3 text-rose-800">
@@ -347,11 +378,27 @@ export const Attendance = () => {
         </div>
       )}
 
+      {fetchError && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 text-xs font-semibold">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{fetchError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => fetchFacultyCourses()}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Session Config Card */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
         <h3 className="font-bold text-base text-slate-800">Class Session Parameters</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="xl:col-span-2">
             <label className="block text-xs font-semibold text-slate-700 mb-1">Subject / Course</label>
             <select
               value={selectedCourse}
@@ -392,15 +439,43 @@ export const Attendance = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Topic Covered</label>
-            <input
-              type="text"
-              placeholder="e.g. Binary Search Trees & Rotations"
-              value={topicCovered}
-              onChange={(e) => setTopicCovered(e.target.value)}
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Session Slot</label>
+            <select
+              value={sessionSlot}
+              onChange={(e) => setSessionSlot(Number(e.target.value))}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
+            >
+              <option value={1}>Period 1 (Morning)</option>
+              <option value={2}>Period 2 / Lab Slot 1</option>
+              <option value={3}>Period 3 / Lab Slot 2</option>
+              <option value={4}>Period 4 (Evening)</option>
+            </select>
           </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Type</label>
+            <select
+              value={sessionType}
+              onChange={(e) => setSessionType(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              <option value="Lecture">Lecture</option>
+              <option value="Lab">Practical Lab</option>
+              <option value="Tutorial">Tutorial</option>
+              <option value="Seminar">Seminar</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 mb-1">Topic Covered</label>
+          <input
+            type="text"
+            placeholder="e.g. Binary Search Trees & Rotations / Lab Exercise 4"
+            value={topicCovered}
+            onChange={(e) => setTopicCovered(e.target.value)}
+            className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          />
         </div>
 
         {/* Quick Batch Actions */}

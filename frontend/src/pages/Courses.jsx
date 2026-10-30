@@ -25,9 +25,11 @@ export const Courses = () => {
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState(initialCourseForm);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
+  const [fetchError, setFetchError] = useState(null);
 
   const fetchData = async (signal) => {
     setLoading(true);
+    setFetchError(null);
     try {
       let url = '/academics/courses?';
       if (selectedDept) url += `department=${selectedDept}&`;
@@ -46,7 +48,7 @@ export const Courses = () => {
     } catch (err) {
       if (err.code !== 'ERR_CANCELED') {
         console.error(err);
-        setStatusMsg({ type: 'error', text: 'Failed to load courses or faculty list.' });
+        setFetchError('Failed to load courses or faculty directory. Please retry.');
       }
     } finally {
       if (!signal?.aborted) setLoading(false);
@@ -109,6 +111,22 @@ export const Courses = () => {
         >
           {statusMsg.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           {statusMsg.text}
+        </div>
+      )}
+
+      {fetchError && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-rose-700 text-xs font-semibold">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{fetchError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => fetchData()}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm shrink-0"
+          >
+            Retry
+          </button>
         </div>
       )}
 
