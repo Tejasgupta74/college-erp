@@ -15,7 +15,26 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
+  BarChart3,
+  TrendingUp,
+  PieChart as PieChartIcon,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
+
+const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#3b82f6'];
 
 export const Dashboard = () => {
   const { user } = useAuth();
@@ -47,6 +66,7 @@ export const Dashboard = () => {
 
   const role = user?.role;
   const metrics = data?.metrics || {};
+  const analytics = data?.analytics || {};
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -61,10 +81,10 @@ export const Dashboard = () => {
             Welcome back, {user?.name}!
           </h1>
           <p className="text-indigo-100 text-sm mt-1 max-w-xl">
-            {role === 'admin' && 'System overview and campus administration control center.'}
-            {role === 'faculty' && 'Manage your lecture sessions, mark attendance, and evaluate students.'}
-            {role === 'student' && 'Check your attendance percentage, upcoming exams, and fee receipts.'}
-            {role === 'accountant' && 'Track fee invoices, record transactions, and monitor campus finances.'}
+            {role === 'admin' && 'Real-time campus administration control center and interactive institutional analytics.'}
+            {role === 'faculty' && 'Review syllabus progress, monitor attendance trends, and inspect student grade distributions.'}
+            {role === 'student' && 'Explore your semester academic standing, subject-wise attendance, and fee history.'}
+            {role === 'accountant' && 'Track fee invoices, record transactions, and analyze collection channels.'}
           </p>
         </div>
 
@@ -124,9 +144,7 @@ export const Dashboard = () => {
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Enrolled</p>
                 <h3 className="text-2xl font-bold text-slate-900 mt-1">{metrics.totalStudents || 0}</h3>
-                <span className="text-xs text-emerald-600 font-medium mt-1 inline-flex items-center gap-1">
-                  Active Students
-                </span>
+                <span className="text-xs text-emerald-600 font-medium mt-1 inline-flex items-center gap-1">Active Students</span>
               </div>
               <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
                 <Users className="w-6 h-6" />
@@ -190,9 +208,7 @@ export const Dashboard = () => {
             <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fee Balance</p>
-                <h3 className="text-2xl font-bold text-slate-900 mt-1">
-                  ₹{(metrics.feePending || 0).toLocaleString()}
-                </h3>
+                <h3 className="text-2xl font-bold text-slate-900 mt-1">₹{(metrics.feePending || 0).toLocaleString()}</h3>
                 <span className="text-xs text-emerald-600 font-medium mt-1 inline-block">
                   ₹{(metrics.feePaid || 0).toLocaleString()} Paid
                 </span>
@@ -205,12 +221,8 @@ export const Dashboard = () => {
             <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Current Semester</p>
-                <h3 className="text-2xl font-bold text-slate-900 mt-1">
-                  Semester {data?.profile?.semester || 1}
-                </h3>
-                <span className="text-xs text-slate-500 font-medium mt-1 inline-block">
-                  Section {data?.profile?.section || 'A'}
-                </span>
+                <h3 className="text-2xl font-bold text-slate-900 mt-1">Semester {data?.profile?.semester || 1}</h3>
+                <span className="text-xs text-slate-500 font-medium mt-1 inline-block">Section {data?.profile?.section || 'A'}</span>
               </div>
               <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
                 <BookOpen className="w-6 h-6" />
@@ -220,12 +232,8 @@ export const Dashboard = () => {
             <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Enrollment No</p>
-                <h3 className="text-lg font-bold text-slate-900 mt-1">
-                  {data?.profile?.enrollmentNo || 'N/A'}
-                </h3>
-                <span className="text-xs text-slate-500 font-medium mt-1 inline-block">
-                  Roll: {data?.profile?.rollNo || 'N/A'}
-                </span>
+                <h3 className="text-lg font-bold text-slate-900 mt-1">{data?.profile?.enrollmentNo || 'N/A'}</h3>
+                <span className="text-xs text-slate-500 font-medium mt-1 inline-block">Roll: {data?.profile?.rollNo || 'N/A'}</span>
               </div>
               <div className="w-12 h-12 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center">
                 <GraduationCap className="w-6 h-6" />
@@ -305,95 +313,203 @@ export const Dashboard = () => {
           <div>
             <h4 className="font-bold text-sm">Attendance Shortage Warning!</h4>
             <p className="text-xs text-rose-700 mt-0.5">
-              Your overall attendance is currently at <span className="font-bold">{metrics.attendancePercent}%</span>, which is below the mandatory 75% university eligibility requirement for final examinations. Please consult your academic mentor.
+              Your overall attendance is currently at <span className="font-bold">{metrics.attendancePercent}%</span>, which is below the mandatory 75% university eligibility requirement for final examinations.
             </p>
           </div>
         </div>
       )}
 
-      {/* Visual Analytics Bar */}
-      {(role === 'admin' || role === 'accountant') && (
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h3 className="font-bold text-sm text-slate-800">Campus Fee Realization Progress</h3>
-              <p className="text-xs text-slate-400">Total institutional receivables vs collections settled</p>
-            </div>
-            <span className="font-black text-indigo-700 text-lg">
-              {metrics.totalBilled > 0 ? Math.round((metrics.totalCollected / metrics.totalBilled) * 100) : 0}% Realized
-            </span>
-          </div>
-
-          {/* Multi-segment progress bar */}
-          <div className="w-full bg-slate-100 h-3.5 rounded-full overflow-hidden flex">
-            <div
-              className="bg-emerald-500 h-full transition-all duration-500"
-              style={{
-                width: `${metrics.totalBilled > 0 ? Math.min(100, (metrics.totalCollected / metrics.totalBilled) * 100) : 0}%`,
-              }}
-              title="Collected"
-            ></div>
-            <div
-              className="bg-rose-400 h-full transition-all duration-500"
-              style={{
-                width: `${metrics.totalBilled > 0 ? Math.min(100, (metrics.totalPending / metrics.totalBilled) * 100) : 0}%`,
-              }}
-              title="Pending"
-            ></div>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 pt-1">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                Collected: <strong className="text-slate-900">₹{(metrics.totalCollected || 0).toLocaleString()}</strong>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-400"></span>
-                Pending Dues: <strong className="text-rose-600">₹{(metrics.totalPending || 0).toLocaleString()}</strong>
-              </span>
-            </div>
-            <span className="text-slate-400">
-              Total Budgeted: <strong className="text-slate-800">₹{(metrics.totalBilled || 0).toLocaleString()}</strong>
-            </span>
-          </div>
+      {/* ==================== INTERACTIVE ANALYTICS SECTION ==================== */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-indigo-600" />
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">Interactive Analytics & Statistics</h2>
         </div>
-      )}
 
-      {role === 'student' && (
-        <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h3 className="font-bold text-sm text-slate-800">Semester Attendance Compliance Meter</h3>
-              <p className="text-xs text-slate-400">Target minimum threshold: 75.0% for end-term examinations</p>
+        {/* ADMIN ANALYTICS GRID */}
+        {role === 'admin' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Department Headcount Bar Chart */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">Department Enrolment</h3>
+                  <p className="text-xs text-slate-400">Total student headcount distributed by branch</p>
+                </div>
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                  <BarChart3 className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={analytics.deptDistribution || []}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                    />
+                    <Bar dataKey="students" fill="#6366f1" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${metrics.attendancePercent >= 75 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                {metrics.attendancePercent >= 75 ? 'Safe Standing' : 'Shortage Alert'}
-              </span>
-              <span className="font-black text-lg text-slate-900">{metrics.attendancePercent}%</span>
+
+            {/* Fee Collection Trend */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">Monthly Fee Realization</h3>
+                  <p className="text-xs text-slate-400">Cashflow trajectory across academic calendar</p>
+                </div>
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={analytics.feeMonthly || []}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      formatter={(val) => [`₹${Number(val).toLocaleString()}`, 'Collected']}
+                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                    />
+                    <Line type="monotone" dataKey="amount" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981' }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
+        )}
 
-          <div className="relative w-full bg-slate-100 h-4 rounded-full overflow-hidden">
-            <div
-              className={`h-full transition-all duration-500 ${metrics.attendancePercent >= 75 ? 'bg-emerald-500' : 'bg-rose-500'}`}
-              style={{ width: `${Math.min(100, metrics.attendancePercent || 0)}%` }}
-            ></div>
-            {/* 75% indicator line */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-slate-900/60 z-10"
-              style={{ left: '75%' }}
-              title="75% Mandatory Cutoff"
-            ></div>
+        {/* FACULTY ANALYTICS GRID */}
+        {role === 'faculty' && (
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">Lecture Attendance Rate Trends</h3>
+                <p className="text-xs text-slate-400">Class presence velocity across recent 10 sessions</p>
+              </div>
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                <TrendingUp className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={analytics.attendanceTrend || []}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="session" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    formatter={(val) => [`${val}%`, 'Attendance Rate']}
+                    contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                  />
+                  <Line type="monotone" dataKey="rate" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
+        )}
 
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>Attended: <strong className="text-slate-800">{metrics.totalClassesAttended} Sessions</strong></span>
-            <span className="font-medium text-slate-400">75% Cutoff Marker</span>
+        {/* STUDENT ANALYTICS GRID */}
+        {role === 'student' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Subject-wise Attendance Bar */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">Subject Attendance Standing</h3>
+                  <p className="text-xs text-slate-400">Compliance vs 75% minimum eligibility requirement</p>
+                </div>
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                  <BarChart3 className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={analytics.courseAttendance || []}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="subject" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      formatter={(val) => [`${val}%`, 'Attendance']}
+                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                    />
+                    <Bar dataKey="percentage" fill="#4f46e5" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Exam Marks Breakdown */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">Exam Marks Scorecard</h3>
+                  <p className="text-xs text-slate-400">Performance scored in recent examinations</p>
+                </div>
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <GraduationCap className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={analytics.performance || []}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="subject" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      formatter={(val) => [`${val} Marks`, 'Score']}
+                      contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                    />
+                    <Bar dataKey="score" fill="#10b981" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* ACCOUNTANT ANALYTICS GRID */}
+        {role === 'accountant' && (
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">Payment Collection Channels</h3>
+                <p className="text-xs text-slate-400">Total institutional volume settled by payment mode</p>
+              </div>
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                <PieChartIcon className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={analytics.paymentChannels || []}
+                    dataKey="value"
+                    nameKey="method"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={({ method, percent }) => `${method}: ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {(analytics.paymentChannels || []).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(val) => [`₹${Number(val).toLocaleString()}`, 'Amount']}
+                    contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '12px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Main Grid: Campus Notices & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
