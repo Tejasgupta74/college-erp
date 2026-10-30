@@ -26,7 +26,8 @@ export const Courses = () => {
   const [formData, setFormData] = useState(initialCourseForm);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
 
-  const fetchData = async () => {
+  const fetchData = async (signal) => {
+    setLoading(true);
     try {
       let url = '/academics/courses?';
       if (selectedDept) url += `department=${selectedDept}&`;
@@ -34,24 +35,29 @@ export const Courses = () => {
       if (user?.role === 'faculty') url += `faculty=${user._id}&`;
 
       const [courseRes, deptRes, facRes] = await Promise.all([
-        api.get(url),
-        api.get('/academics/departments'),
-        user?.role === 'admin' ? api.get('/faculty') : Promise.resolve({ data: { data: [] } }),
+        api.get(url, { signal }),
+        api.get('/academics/departments', { signal }),
+        user?.role === 'admin' ? api.get('/faculty?limit=100', { signal }) : Promise.resolve({ data: { data: [] } }),
       ]);
 
       setCourses(courseRes.data.data || []);
       setDepartments(deptRes.data.data || []);
       setFacultyList(facRes.data.data || []);
     } catch (err) {
-      console.error(err);
+      if (err.code !== 'ERR_CANCELED') {
+        console.error(err);
+        setStatusMsg({ type: 'error', text: 'Failed to load courses or faculty list.' });
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, [selectedDept, selectedSemester]);
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
+  }, [selectedDept, selectedSemester, user]);
 
   useEffect(() => {
     if (!statusMsg.text) return;

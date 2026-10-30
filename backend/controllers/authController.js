@@ -290,12 +290,11 @@ export const adminResetPassword = async (req, res) => {
 };
 
 // @desc    Verify cryptographically hashed token & reset password
-// @route   POST /api/auth/reset-password or /api/auth/reset-password/:token
+// @route   POST /api/auth/reset-password
 // @access  Public
 export const resetPassword = async (req, res) => {
   try {
-    const token = req.params.token || req.body.token;
-    const { newPassword } = req.body;
+    const { token, newPassword } = req.body;
 
     if (!token || !newPassword) {
       return res.status(400).json({

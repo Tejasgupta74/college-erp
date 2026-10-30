@@ -17,24 +17,37 @@ export const Notices = () => {
 
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState(initialNoticeForm);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
 
-  const fetchNotices = async () => {
+  const fetchNotices = async (signal) => {
+    setLoading(true);
     try {
-      const res = await api.get('/notices');
+      const res = await api.get(`/notices?page=${page}&limit=20`, { signal });
       setNotices(res.data.data || []);
+      setPagination({
+        page: res.data.page || 1,
+        pages: res.data.pages || 1,
+        total: res.data.total || (res.data.data || []).length,
+      });
     } catch (err) {
-      console.error(err);
+      if (err.code !== 'ERR_CANCELED') {
+        console.error(err);
+        setStatusMsg({ type: 'error', text: 'Failed to load announcements.' });
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchNotices();
-  }, []);
+    const controller = new AbortController();
+    fetchNotices(controller.signal);
+    return () => controller.abort();
+  }, [page]);
 
   useEffect(() => {
     if (!statusMsg.text) return;
@@ -170,6 +183,37 @@ export const Notices = () => {
               No campus announcements posted yet.
             </div>
           )}
+        </div>
+      )}
+
+      {pagination.pages > 1 && (
+        <div className="flex items-center justify-between px-6 py-4 rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+          <p className="text-xs text-slate-500">
+            Showing <span className="font-semibold text-slate-700">{((pagination.page - 1) * 20) + 1}</span> to{' '}
+            <span className="font-semibold text-slate-700">{Math.min(pagination.page * 20, pagination.total)}</span> of{' '}
+            <span className="font-semibold text-slate-700">{pagination.total}</span> notices
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+              disabled={pagination.page <= 1}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-xs font-semibold text-slate-600 px-2">
+              Page {pagination.page} of {pagination.pages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.min(prev + 1, pagination.pages))}
+              disabled={pagination.page >= pagination.pages}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
 

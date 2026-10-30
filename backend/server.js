@@ -77,10 +77,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestIdMiddleware);
 
+// In development, display concise colored HTTP request logs in console
+// In production, requestIdMiddleware handles structured logging to Winston (no duplicate lines)
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
-} else {
-  app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
 }
 
 // Static files & rate limiting

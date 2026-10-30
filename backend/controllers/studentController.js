@@ -82,6 +82,70 @@ export const getStudents = async (req, res) => {
   }
 };
 
+// @desc    Get complete course & cohort roster for attendance and examinations (unpaginated)
+// @route   GET /api/students/roster
+// @access  Private (Admin, Faculty, Accountant)
+export const getStudentRoster = async (req, res) => {
+  try {
+    const { department, semester, section, courseId } = req.query;
+    const query = {};
+
+    if (courseId) {
+      const course = await Course.findById(courseId);
+      if (course) {
+        query.department = course.department;
+        query.semester = course.semester;
+      }
+    }
+
+    if (department) query.department = department;
+    if (semester) query.semester = Number(semester);
+    if (section && section !== 'all') query.section = section;
+
+    if (req.user.role === 'faculty') {
+      const assignedCourses = await Course.find({ faculty: req.user._id }).select('department semester');
+      const assignments = assignedCourses.map((c) => ({ department: c.department, semester: c.semester }));
+      if (assignments.length > 0) {
+        if (query.department && query.semester) {
+          const isAssigned = assignments.some(
+            (a) => a.department.toString() === query.department.toString() && a.semester === query.semester
+          );
+          if (!isAssigned) {
+            return res.status(403).json({ success: false, message: 'You can only view rosters for your assigned courses' });
+          }
+        } else {
+          query.$or = assignments;
+        }
+      } else {
+        return res.json({ success: true, count: 0, data: [] });
+      }
+    }
+
+    const profiles = await StudentProfile.find(query)
+      .populate({
+        path: 'user',
+        match: { isActive: { $ne: false } },
+        select: 'name email phone avatar isActive',
+      })
+      .populate('department', 'name code')
+      .sort({ rollNo: 1, enrollmentNo: 1 })
+      .lean();
+
+    const activeRoster = profiles.filter((p) => p.user);
+
+    res.json({
+      success: true,
+      count: activeRoster.length,
+      data: activeRoster,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
+  }
+};
+
 export const getStudentById = async (req, res) => {
   try {
     const paramId = req.params.id;

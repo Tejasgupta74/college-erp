@@ -26,36 +26,53 @@ export const Students = () => {
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedSem, setSelectedSem] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [showModal, setShowModal] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [showDossierModal, setShowDossierModal] = useState(false);
   const [formData, setFormData] = useState(initialStudentForm);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
 
-  const fetchStudents = async () => {
+  const fetchStudents = async (signal) => {
+    setLoading(true);
     try {
-      let url = '/students?';
-      if (search) url += `search=${search}&`;
+      let url = `/students?page=${page}&limit=20&`;
+      if (search) url += `search=${encodeURIComponent(search)}&`;
       if (selectedDept) url += `department=${selectedDept}&`;
       if (selectedSem) url += `semester=${selectedSem}&`;
 
       const [res, deptRes] = await Promise.all([
-        api.get(url),
-        api.get('/academics/departments'),
+        api.get(url, { signal }),
+        api.get('/academics/departments', { signal }),
       ]);
 
       setStudents(res.data.data || []);
+      setPagination({
+        page: res.data.page || 1,
+        pages: res.data.pages || 1,
+        total: res.data.total || (res.data.data || []).length,
+      });
       setDepartments(deptRes.data.data || []);
     } catch (err) {
-      console.error(err);
+      if (err.code !== 'ERR_CANCELED') {
+        console.error(err);
+        setStatusMsg({ type: 'error', text: 'Failed to load students directory.' });
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStudents();
+    setPage(1);
   }, [search, selectedDept, selectedSem]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchStudents(controller.signal);
+    return () => controller.abort();
+  }, [page, search, selectedDept, selectedSem]);
 
   useEffect(() => {
     if (!statusMsg.text) return;
@@ -273,6 +290,37 @@ export const Students = () => {
               </tbody>
             </table>
           </div>
+
+          {pagination.pages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <p className="text-xs text-slate-500">
+                Showing <span className="font-semibold text-slate-700">{((pagination.page - 1) * 20) + 1}</span> to{' '}
+                <span className="font-semibold text-slate-700">{Math.min(pagination.page * 20, pagination.total)}</span> of{' '}
+                <span className="font-semibold text-slate-700">{pagination.total}</span> students
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={pagination.page <= 1}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                <span className="text-xs font-semibold text-slate-600 px-2">
+                  Page {pagination.page} of {pagination.pages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.min(prev + 1, pagination.pages))}
+                  disabled={pagination.page >= pagination.pages}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

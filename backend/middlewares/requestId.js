@@ -2,7 +2,10 @@ import crypto from 'crypto';
 import logger from '../config/logger.js';
 
 export const requestIdMiddleware = (req, res, next) => {
-  const reqId = req.headers['x-request-id'] || crypto.randomUUID();
+  const rawHeader = req.headers['x-request-id'];
+  // Validate incoming X-Request-Id: must be safe alphanumeric/UUID string (8-64 characters)
+  const isValidHeader = typeof rawHeader === 'string' && /^[a-zA-Z0-9_-]{8,64}$/.test(rawHeader);
+  const reqId = isValidHeader ? rawHeader : crypto.randomUUID();
   req.id = reqId;
   res.setHeader('X-Request-Id', reqId);
 

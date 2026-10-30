@@ -24,6 +24,8 @@ export const Fees = () => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
 
   // Modals
   const [showPayModal, setShowPayModal] = useState(false);
@@ -38,31 +40,46 @@ export const Fees = () => {
   const [invoiceData, setInvoiceData] = useState(initialInvoiceData);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
 
-  const fetchFees = async () => {
+  const fetchFees = async (signal) => {
+    setLoading(true);
     try {
-      let url = '/fees?';
+      let url = `/fees?page=${page}&limit=20&`;
       if (isStudent && user?._id) url += `studentId=${user._id}&`;
       if (statusFilter) url += `status=${statusFilter}&`;
 
       const [feeRes, deptRes, stRes] = await Promise.all([
-        api.get(url),
-        api.get('/academics/departments'),
-        isAccountant ? api.get('/students') : Promise.resolve({ data: { data: [] } }),
+        api.get(url, { signal }),
+        api.get('/academics/departments', { signal }),
+        isAccountant ? api.get('/students?limit=100', { signal }) : Promise.resolve({ data: { data: [] } }),
       ]);
 
       setFees(feeRes.data.data || []);
+      setPagination({
+        page: feeRes.data.page || 1,
+        pages: feeRes.data.pages || 1,
+        total: feeRes.data.total || (feeRes.data.data || []).length,
+      });
       setDepartments(deptRes.data.data || []);
       setStudents(stRes.data.data || []);
     } catch (err) {
-      console.error(err);
+      if (err.code !== 'ERR_CANCELED') {
+        console.error(err);
+        setStatusMsg({ type: 'error', text: 'Failed to load fee records.' });
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchFees();
-  }, [statusFilter, user]);
+    setPage(1);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchFees(controller.signal);
+    return () => controller.abort();
+  }, [page, statusFilter, user]);
 
   useEffect(() => {
     if (!statusMsg.text) return;
@@ -272,6 +289,37 @@ export const Fees = () => {
               </tbody>
             </table>
           </div>
+
+          {pagination.pages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <p className="text-xs text-slate-500">
+                Showing <span className="font-semibold text-slate-700">{((pagination.page - 1) * 20) + 1}</span> to{' '}
+                <span className="font-semibold text-slate-700">{Math.min(pagination.page * 20, pagination.total)}</span> of{' '}
+                <span className="font-semibold text-slate-700">{pagination.total}</span> invoices
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={pagination.page <= 1}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                <span className="text-xs font-semibold text-slate-600 px-2">
+                  Page {pagination.page} of {pagination.pages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.min(prev + 1, pagination.pages))}
+                  disabled={pagination.page >= pagination.pages}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

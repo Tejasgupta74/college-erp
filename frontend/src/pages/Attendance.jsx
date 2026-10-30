@@ -21,6 +21,7 @@ export const Attendance = () => {
   // State for faculty/admin
   const [courses, setCourses] = useState([]);
   const [selectedCourse, setSelectedCourse] = useState('');
+  const [selectedSection, setSelectedSection] = useState('A');
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
   const [topicCovered, setTopicCovered] = useState('');
   const [students, setStudents] = useState([]);
@@ -32,15 +33,19 @@ export const Attendance = () => {
   const [studentSummary, setStudentSummary] = useState(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     if (isStudent) {
       const fetchStudentSummary = async () => {
         try {
-          const res = await api.get(`/attendance/student/${user._id}`);
+          const res = await api.get(`/attendance/student/${user._id}`, { signal: controller.signal });
           setStudentSummary(res.data.data);
         } catch (err) {
-          console.error(err);
+          if (err.code !== 'ERR_CANCELED') {
+            console.error(err);
+            setStatusMsg({ type: 'error', text: 'Failed to load attendance summary.' });
+          }
         } finally {
-          setLoading(false);
+          if (!controller.signal.aborted) setLoading(false);
         }
       };
       fetchStudentSummary();
@@ -48,19 +53,23 @@ export const Attendance = () => {
       const fetchCourses = async () => {
         try {
           const url = user?.role === 'faculty' ? `/academics/courses?faculty=${user._id}` : '/academics/courses';
-          const res = await api.get(url);
+          const res = await api.get(url, { signal: controller.signal });
           const courseList = res.data.data || [];
           setCourses(courseList);
           if (courseList.length > 0) setSelectedCourse(courseList[0]._id);
         } catch (err) {
-          console.error(err);
+          if (err.code !== 'ERR_CANCELED') {
+            console.error(err);
+            setStatusMsg({ type: 'error', text: 'Failed to load assigned courses.' });
+          }
         } finally {
-          setLoading(false);
+          if (!controller.signal.aborted) setLoading(false);
         }
       };
       fetchCourses();
     }
-  }, [user]);
+    return () => controller.abort();
+  }, [user, isStudent]);
 
   // Auto-clear status message
   useEffect(() => {
@@ -69,40 +78,53 @@ export const Attendance = () => {
     return () => clearTimeout(timer);
   }, [statusMsg]);
 
-  // When selectedCourse changes, fetch students in that course's department and semester
+  // When selectedCourse or selectedSection or attendanceDate changes, fetch full student roster & saved records
   useEffect(() => {
     if (!isStudent && selectedCourse) {
-      let cancelled = false;
+      const controller = new AbortController();
       const courseObj = courses.find((c) => c._id === selectedCourse);
       if (courseObj) {
         const fetchStudentsForCourse = async () => {
           try {
             const departmentId = courseObj.department?._id || courseObj.department;
             const [studentsRes, attendanceRes] = await Promise.all([
-              api.get(`/students?department=${departmentId}&semester=${courseObj.semester}&section=A`),
-              api.get(`/attendance?courseId=${selectedCourse}&date=${attendanceDate}&section=A`),
+              api.get(
+                `/students/roster?department=${departmentId}&semester=${courseObj.semester}&section=${selectedSection}`,
+                { signal: controller.signal }
+              ),
+              api.get(
+                `/attendance?courseId=${selectedCourse}&date=${attendanceDate}&section=${selectedSection}`,
+                { signal: controller.signal }
+              ),
             ]);
-            if (cancelled) return;
+            if (controller.signal.aborted) return;
             const studentList = studentsRes.data.data || [];
             setStudents(studentList);
 
             const existing = attendanceRes.data.data?.[0];
-            const savedRecords = new Map((existing?.records || []).map((record) => [String(record.student?._id || record.student), record.status]));
+            const savedRecords = new Map(
+              (existing?.records || []).map((record) => [String(record.student?._id || record.student), record.status])
+            );
             const initialRecs = {};
             studentList.forEach((student) => {
               const id = student.user?._id;
-              initialRecs[id] = savedRecords.get(id) || 'Present';
+              if (id) {
+                initialRecs[id] = savedRecords.get(id) || 'Present';
+              }
             });
             setRecords(initialRecs);
           } catch (err) {
-            console.error(err);
+            if (err.code !== 'ERR_CANCELED') {
+              console.error(err);
+              setStatusMsg({ type: 'error', text: 'Failed to load students roster or attendance records.' });
+            }
           }
         };
         fetchStudentsForCourse();
       }
-      return () => { cancelled = true; };
+      return () => controller.abort();
     }
-  }, [selectedCourse, courses, isStudent, attendanceDate]);
+  }, [selectedCourse, selectedSection, courses, isStudent, attendanceDate]);
 
   const handleStatusChange = (studentUserId, status) => {
     setRecords((prev) => ({ ...prev, [studentUserId]: status }));
@@ -131,7 +153,7 @@ export const Attendance = () => {
         courseId: selectedCourse,
         departmentId: courseObj?.department?._id || courseObj?.department,
         semester: courseObj?.semester,
-        section: 'A',
+        section: selectedSection,
         date: attendanceDate,
         topicCovered,
         records: recordPayload,
@@ -328,7 +350,7 @@ export const Attendance = () => {
       {/* Session Config Card */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm space-y-4">
         <h3 className="font-bold text-base text-slate-800">Class Session Parameters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Subject / Course</label>
             <select
@@ -339,6 +361,21 @@ export const Attendance = () => {
               {courses.map((c) => (
                 <option key={c._id} value={c._id}>
                   {c.code} - {c.name} (Sem {c.semester})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Section</label>
+            <select
+              value={selectedSection}
+              onChange={(e) => setSelectedSection(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            >
+              {['A', 'B', 'C', 'D'].map((sec) => (
+                <option key={sec} value={sec}>
+                  Section {sec}
                 </option>
               ))}
             </select>

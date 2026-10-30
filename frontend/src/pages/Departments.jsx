@@ -11,19 +11,25 @@ export const Departments = () => {
   const [formData, setFormData] = useState({ name: '', code: '', description: '' });
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
 
-  const fetchDepartments = async () => {
+  const fetchDepartments = async (signal) => {
+    setLoading(true);
     try {
-      const res = await api.get('/academics/departments');
+      const res = await api.get('/academics/departments', { signal });
       setDepartments(res.data.data || []);
     } catch (err) {
-      console.error(err);
+      if (err.code !== 'ERR_CANCELED') {
+        console.error(err);
+        setStatusMsg({ type: 'error', text: 'Failed to load academic departments.' });
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDepartments();
+    const controller = new AbortController();
+    fetchDepartments(controller.signal);
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {

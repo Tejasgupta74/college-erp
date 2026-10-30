@@ -244,6 +244,41 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     assert.match(resetData.message, /Password reset successfully/i);
   });
 
+  test('11. Student Cohort Roster API for Attendance & Examination Grading', async () => {
+    // 1. Fetch full roster as admin
+    const rosterRes = await fetch(`${BASE_URL}/students/roster`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(rosterRes.status, 200);
+    const rosterData = await rosterRes.json();
+    assert.ok(rosterData.success);
+    assert.ok(Array.isArray(rosterData.data));
+    assert.ok(rosterData.count >= 0);
+
+    // 2. Fetch roster with section filter
+    const sectionRosterRes = await fetch(`${BASE_URL}/students/roster?section=A`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(sectionRosterRes.status, 200);
+    const sectionRosterData = await sectionRosterRes.json();
+    assert.ok(sectionRosterData.success);
+    assert.ok(Array.isArray(sectionRosterData.data));
+
+    // 3. Unauthorized access by student must be rejected
+    const freshStudentLogin = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'student@college.edu', password: 'Student@123' }),
+    });
+    const freshStudentData = await freshStudentLogin.json();
+    const freshStudentToken = freshStudentData.token;
+
+    const studentFailRes = await fetch(`${BASE_URL}/students/roster`, {
+      headers: { Authorization: `Bearer ${freshStudentToken}` },
+    });
+    assert.equal(studentFailRes.status, 403, 'Students must not access cohort rosters');
+  });
+
   after(async () => {
     if (spawnedServer) {
       console.log('[Test Teardown] Stopping test backend server process...');

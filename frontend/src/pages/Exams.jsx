@@ -29,6 +29,8 @@ export const Exams = () => {
   const [courses, setCourses] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
 
   // Modals / Marks entry
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -38,32 +40,43 @@ export const Exams = () => {
   const [marksEntries, setMarksEntries] = useState([]); // [{ studentId, name, rollNo, marksObtained, remarks }]
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
 
-  const fetchData = async () => {
+  const fetchData = async (signal) => {
+    setLoading(true);
     try {
       if (isStudent) {
-        const res = await api.get(`/exams/report-card/${user._id}`);
+        const res = await api.get(`/exams/report-card/${user._id}`, { signal });
         setReportCard(res.data.data || []);
       } else {
         const [examRes, courseRes, deptRes] = await Promise.all([
-          api.get('/exams'),
-          api.get('/academics/courses'),
-          api.get('/academics/departments'),
+          api.get(`/exams?page=${page}&limit=20`, { signal }),
+          api.get('/academics/courses', { signal }),
+          api.get('/academics/departments', { signal }),
         ]);
 
         setExams(examRes.data.data || []);
+        setPagination({
+          page: examRes.data.page || 1,
+          pages: examRes.data.pages || 1,
+          total: examRes.data.total || (examRes.data.data || []).length,
+        });
         setCourses(courseRes.data.data || []);
         setDepartments(deptRes.data.data || []);
       }
     } catch (err) {
-      console.error(err);
+      if (err.code !== 'ERR_CANCELED') {
+        console.error(err);
+        setStatusMsg({ type: 'error', text: 'Failed to load examinations.' });
+      }
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, [user]);
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
+  }, [user, page]);
 
   useEffect(() => {
     if (!statusMsg.text) return;
@@ -87,13 +100,13 @@ export const Exams = () => {
   const handleOpenMarksEntry = async (exam) => {
     setActiveExamForMarks(exam);
     try {
-      // Fetch enrolled students for this course & department
+      // Fetch entire enrolled student cohort for this course & department
       const res = await api.get(
-        `/students?department=${exam.department?._id || exam.department}&semester=${exam.semester}`
+        `/students/roster?department=${exam.department?._id || exam.department}&semester=${exam.semester}`
       );
       const studentList = res.data.data || [];
 
-      // Merge with existing exam results if already recorded
+      // Merge with existing exam results if already recorded, leaving unentered rows empty (not 0)
       const entries = studentList.map((st) => {
         const existingResult = exam.results?.find(
           (r) => (r.student?._id || r.student)?.toString() === st.user?._id?.toString()
@@ -102,7 +115,7 @@ export const Exams = () => {
           studentId: st.user?._id,
           name: st.user?.name,
           rollNo: st.rollNo,
-          marksObtained: existingResult ? existingResult.marksObtained : 0,
+          marksObtained: existingResult != null && existingResult.marksObtained !== undefined ? existingResult.marksObtained : '',
           remarks: existingResult ? existingResult.remarks : '',
         };
       });
@@ -110,6 +123,7 @@ export const Exams = () => {
       setMarksEntries(entries);
     } catch (err) {
       console.error(err);
+      setStatusMsg({ type: 'error', text: 'Failed to load student roster for this examination.' });
     }
   };
 
@@ -117,9 +131,22 @@ export const Exams = () => {
     e.preventDefault();
     if (!activeExamForMarks) return;
 
+    // Filter to only rows that were actively filled in so unentered/absent students aren't failed with 0
+    const filledEntries = marksEntries
+      .filter((entry) => entry.marksObtained !== '' && entry.marksObtained !== null && entry.marksObtained !== undefined)
+      .map((entry) => ({
+        ...entry,
+        marksObtained: Number(entry.marksObtained),
+      }));
+
+    if (filledEntries.length === 0) {
+      setStatusMsg({ type: 'error', text: 'Please enter marks for at least one student before saving.' });
+      return;
+    }
+
     try {
       await api.post(`/exams/${activeExamForMarks._id}/marks`, {
-        results: marksEntries,
+        results: filledEntries,
       });
 
       setStatusMsg({ type: 'success', text: `Marks for ${activeExamForMarks.title} submitted successfully!` });
@@ -302,10 +329,11 @@ export const Exams = () => {
                           type="number"
                           min="0"
                           max={activeExamForMarks.maxMarks}
+                          placeholder="Unentered"
                           value={entry.marksObtained}
                           onChange={(e) => {
                             const updated = [...marksEntries];
-                            updated[idx].marksObtained = e.target.value;
+                            updated[idx].marksObtained = e.target.value === '' ? '' : e.target.value;
                             setMarksEntries(updated);
                           }}
                           className="w-24 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-indigo-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -408,6 +436,37 @@ export const Exams = () => {
               </tbody>
             </table>
           </div>
+
+          {pagination.pages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <p className="text-xs text-slate-500">
+                Showing <span className="font-semibold text-slate-700">{((pagination.page - 1) * 20) + 1}</span> to{' '}
+                <span className="font-semibold text-slate-700">{Math.min(pagination.page * 20, pagination.total)}</span> of{' '}
+                <span className="font-semibold text-slate-700">{pagination.total}</span> examinations
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={pagination.page <= 1}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                <span className="text-xs font-semibold text-slate-600 px-2">
+                  Page {pagination.page} of {pagination.pages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((prev) => Math.min(prev + 1, pagination.pages))}
+                  disabled={pagination.page >= pagination.pages}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
