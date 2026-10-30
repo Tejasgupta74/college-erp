@@ -1,7 +1,7 @@
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = `http://localhost:${process.env.PORT || 8000}/api`;
 
 describe('College ERP Production Architecture & API Test Suite', () => {
   let adminToken = '';
