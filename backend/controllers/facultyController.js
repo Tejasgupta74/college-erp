@@ -4,13 +4,15 @@ import User from '../models/User.js';
 import Course from '../models/Course.js';
 import { recordAudit } from '../utils/audit.js';
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export const getFaculty = async (req, res) => {
   try {
     const { department, search, page = 1, limit = 20 } = req.query;
     const query = department ? { department } : {};
 
     if (search && search.trim()) {
-      const s = search.trim();
+      const s = escapeRegex(search.trim());
       const matchingUsers = await User.find({
         $or: [
           { name: { $regex: s, $options: 'i' } },
@@ -48,7 +50,10 @@ export const getFaculty = async (req, res) => {
       data: profiles,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -71,7 +76,10 @@ export const getFacultyById = async (req, res) => {
     const assignedCourses = facultyUserId ? await Course.find({ faculty: facultyUserId }).populate('department', 'name code') : [];
     res.json({ success: true, data: { profile, assignedCourses } });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -116,6 +124,9 @@ export const deleteFaculty = async (req, res) => {
     ]);
     res.json({ success: true, message: 'Faculty member deleted successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };

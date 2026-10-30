@@ -7,6 +7,8 @@ import Exam from '../models/Exam.js';
 import Course from '../models/Course.js';
 import { recordAudit } from '../utils/audit.js';
 
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export const getStudents = async (req, res) => {
   try {
     const { department, semester, section, search, page = 1, limit = 20 } = req.query;
@@ -22,7 +24,7 @@ export const getStudents = async (req, res) => {
     }
 
     if (search && search.trim()) {
-      const s = search.trim();
+      const s = escapeRegex(search.trim());
       const matchingUsers = await User.find({
         $or: [
           { name: { $regex: s, $options: 'i' } },
@@ -73,7 +75,10 @@ export const getStudents = async (req, res) => {
       data: profiles,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -142,7 +147,10 @@ export const getStudentById = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -184,26 +192,42 @@ export const deleteStudent = async (req, res) => {
 
     const studentUserId = profile.user;
 
+    // Deactivate user account to preserve financial ledger and historical invoices
+    if (studentUserId) {
+      await User.findByIdAndUpdate(studentUserId, { isActive: false });
+    }
+
+    // Remove active student profile and prune active attendance/exams with targeted query
     await Promise.all([
-      studentUserId ? User.findByIdAndDelete(studentUserId) : Promise.resolve(),
       StudentProfile.findByIdAndDelete(req.params.id),
-      // Cascade delete / sanitize associated orphaned records
-      studentUserId ? Attendance.updateMany({}, { $pull: { records: { student: studentUserId } } }) : Promise.resolve(),
-      studentUserId ? Fee.deleteMany({ student: studentUserId }) : Promise.resolve(),
-      studentUserId ? Exam.updateMany({}, { $pull: { results: { student: studentUserId } } }) : Promise.resolve(),
+      studentUserId
+        ? Attendance.updateMany(
+            { 'records.student': studentUserId },
+            { $pull: { records: { student: studentUserId } } }
+          )
+        : Promise.resolve(),
+      studentUserId
+        ? Exam.updateMany(
+            { 'results.student': studentUserId },
+            { $pull: { results: { student: studentUserId } } }
+          )
+        : Promise.resolve(),
     ]);
 
     recordAudit({
       user: req.user,
-      action: 'DELETE_STUDENT_CASCADE',
+      action: 'DEACTIVATE_STUDENT',
       resource: 'StudentProfile',
       resourceId: req.params.id,
       ip: req.ip,
       details: { enrollmentNo: profile.enrollmentNo, rollNo: profile.rollNo },
     });
 
-    res.json({ success: true, message: 'Student profile and associated academic records deleted successfully' });
+    res.json({
+      success: true,
+      message: 'Student deactivated and removed from active roster. Financial and fee records preserved for accounting audit.',
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'Failed to process student deactivation' });
   }
 };

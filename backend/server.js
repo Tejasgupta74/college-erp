@@ -46,13 +46,11 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(mongoSanitize());
 app.use(cookieParser());
 
-// Strict exact-match CORS whitelist (no wildcards or insecure regex substrings)
+// Strict exact-match CORS whitelist (configured exclusively via environment)
 const explicitOrigins = [
   process.env.CORS_ORIGIN,
   process.env.CLIENT_URL,
-  'https://college-erp-frontend-lira.onrender.com',
-  'http://localhost:3000',
-  'http://localhost:5173',
+  ...(process.env.NODE_ENV !== 'production' ? ['http://localhost:3000', 'http://localhost:5173'] : []),
 ]
   .flatMap((o) => (o ? o.split(',') : []))
   .map((o) => o.trim())

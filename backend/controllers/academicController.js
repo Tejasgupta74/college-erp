@@ -12,7 +12,10 @@ export const getDepartments = async (req, res) => {
     const departments = await Department.find().populate('hod', 'name email phone');
     res.json({ success: true, count: departments.length, data: departments });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -65,7 +68,10 @@ export const deleteDepartment = async (req, res) => {
     recordAudit({ user: req.user, action: 'DELETE_DEPARTMENT', resource: 'Department', resourceId: req.params.id, ip: req.ip });
     res.json({ success: true, message: 'Department removed successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -94,7 +100,10 @@ export const getCourses = async (req, res) => {
 
     res.json({ success: true, count: courses.length, data: courses });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -146,6 +155,9 @@ export const deleteCourse = async (req, res) => {
     recordAudit({ user: req.user, action: 'DELETE_COURSE', resource: 'Course', resourceId: req.params.id, ip: req.ip });
     res.json({ success: true, message: 'Course removed successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };

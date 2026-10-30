@@ -10,6 +10,6 @@ router
   .get(authorize('admin', 'accountant', 'student'), getFees)
   .post(authorize('admin', 'accountant'), createFeeInvoice);
 
-router.post('/:id/pay', authorize('admin'), recordPayment);
+router.post('/:id/pay', authorize('admin', 'accountant'), recordPayment);
 
 export default router;

@@ -61,7 +61,10 @@ export const login = async (req, res) => {
 
     res.json({ success: true, token, user: formatUserResponse(user, profile) });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -74,7 +77,10 @@ export const getMe = async (req, res) => {
     const profile = await getProfileForUser(user);
     res.json({ success: true, user: formatUserResponse(user, profile) });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -163,6 +169,16 @@ export const changePassword = async (req, res) => {
     user.tokenVersion = (user.tokenVersion || 0) + 1; // Invalidate all prior active sessions
     await user.save();
 
+    // Issue fresh token for current session so user is not logged out
+    const newToken = generateToken(user._id, user.tokenVersion);
+    const isProd = process.env.NODE_ENV === 'production';
+    res.cookie('token', newToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'strict' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     recordAudit({
       user: req.user,
       action: 'CHANGE_PASSWORD',
@@ -171,9 +187,13 @@ export const changePassword = async (req, res) => {
       ip: req.ip,
     });
 
-    res.json({ success: true, message: 'Password updated successfully. Existing sessions invalidated.' });
+    res.json({
+      success: true,
+      message: 'Password updated successfully. Other active sessions revoked.',
+      token: newToken,
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'Failed to update password' });
   }
 };
 
@@ -210,16 +230,62 @@ export const forgotPassword = async (req, res) => {
       details: { email: user.email },
     });
 
-    const isNonProd = process.env.NODE_ENV !== 'production';
+    const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
 
     res.json({
       success: true,
-      message: 'Password reset token generated successfully. Valid for 15 minutes.',
-      // In development or test environments, include the token for verification
-      ...(isNonProd && { resetToken }),
+      message: isDev
+        ? 'Password reset token generated successfully. Valid for 15 minutes.'
+        : 'If the provided email is registered, password reset instructions have been issued. Please contact your administrator if you require assistance.',
+      // In development or test environments, include the token for automated testing
+      ...(isDev && { resetToken }),
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: 'Failed to process forgot password request' });
+  }
+};
+
+// @desc    Admin Reset Password for any user
+// @route   POST /api/auth/admin-reset-password
+// @access  Private (Admin only)
+export const adminResetPassword = async (req, res) => {
+  try {
+    const { userId, email, newPassword } = req.body;
+    if ((!userId && !email) || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Please provide user ID/email and new password' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters long' });
+    }
+
+    const query = userId ? { _id: userId } : { email: email.trim().toLowerCase() };
+    const user = await User.findOne(query);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    user.tokenVersion = (user.tokenVersion || 0) + 1; // Invalidate all prior sessions
+    await user.save();
+
+    recordAudit({
+      user: req.user,
+      action: 'ADMIN_RESET_PASSWORD',
+      resource: 'User',
+      resourceId: user._id,
+      ip: req.ip,
+      details: { targetEmail: user.email },
+    });
+
+    res.json({
+      success: true,
+      message: `Password for ${user.name} (${user.email}) has been reset successfully. Existing sessions revoked.`,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to reset user password' });
   }
 };
 
@@ -277,7 +343,10 @@ export const resetPassword = async (req, res) => {
       message: 'Password reset successfully! You can now log in with your new password.',
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 

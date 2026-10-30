@@ -80,7 +80,10 @@ export const markAttendance = async (req, res) => {
 
     res.status(201).json({ success: true, message: 'Attendance saved successfully', data: populated });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -112,7 +115,10 @@ export const getAttendance = async (req, res) => {
 
     res.json({ success: true, count: records.length, data: records });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -184,6 +190,9 @@ export const getStudentAttendanceSummary = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };

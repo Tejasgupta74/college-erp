@@ -47,7 +47,10 @@ export const getFees = async (req, res) => {
       data: fees,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -91,13 +94,13 @@ export const createFeeInvoice = async (req, res) => {
 
 // @desc    Record and approve fee payment
 // @route   POST /api/fees/:id/pay
-// @access  Private (Admin only)
+// @access  Private (Admin & Accountant)
 export const recordPayment = async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
+    if (!['admin', 'accountant'].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: 'Only Administrators are authorized to approve and record fee payments',
+        message: 'Only Administrators and Accounts Officers are authorized to record fee payments',
       });
     }
 
@@ -178,6 +181,9 @@ export const recordPayment = async (req, res) => {
       data: populated,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };

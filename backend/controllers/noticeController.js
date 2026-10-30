@@ -11,8 +11,8 @@ export const getNotices = async (req, res) => {
       ? {}
       : { targetAudience: { $in: ['all', ...roleAudience] } };
 
-    const pageNum = Math.max(1, parseInt(page, 10));
-    const limitNum = Math.max(1, parseInt(limit, 10));
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
     const skip = (pageNum - 1) * limitNum;
 
     const [notices, totalCount] = await Promise.all([
@@ -33,7 +33,10 @@ export const getNotices = async (req, res) => {
       data: notices,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -62,6 +65,9 @@ export const deleteNotice = async (req, res) => {
     recordAudit({ user: req.user, action: 'DELETE_NOTICE', resource: 'Notice', resourceId: req.params.id, ip: req.ip });
     res.json({ success: true, message: 'Notice deleted successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };

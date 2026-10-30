@@ -236,7 +236,7 @@ export const Fees = () => {
                             )}
 
                             {fee.status !== 'Paid' ? (
-                              user?.role === 'admin' ? (
+                              (user?.role === 'admin' || user?.role === 'accountant') ? (
                                 <button
                                   onClick={() => {
                                     setSelectedFee(fee);
@@ -245,11 +245,11 @@ export const Fees = () => {
                                   }}
                                   className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
                                 >
-                                  Approve Payment
+                                  Record Payment
                                 </button>
                               ) : (
                                 <span className="text-xs text-amber-600 font-medium px-2.5 py-1 bg-amber-50 rounded-lg">
-                                  Pending Approval
+                                  Pending Payment
                                 </span>
                               )
                             ) : (

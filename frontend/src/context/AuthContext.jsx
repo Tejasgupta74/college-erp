@@ -15,11 +15,17 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(() => localStorage.getItem('erp_token') || null);
   const [loading, setLoading] = useState(true);
 
-  const logout = useCallback(() => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('erp_token');
-    localStorage.removeItem('erp_user');
+  const logout = useCallback(async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // Ignore network errors on logout
+    } finally {
+      setToken(null);
+      setUser(null);
+      localStorage.removeItem('erp_token');
+      localStorage.removeItem('erp_user');
+    }
   }, []);
 
   useEffect(() => {

@@ -270,6 +270,16 @@ export const Login = () => {
                   <span>Request Reset Token</span>
                 )}
               </button>
+
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => setResetStep(2)}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                >
+                  Already have an administrator reset token? Click here
+                </button>
+              </div>
             </form>
           ) : (
             /* SECURE PASSWORD RESET - STEP 2 (ENTER TOKEN & SET PASSWORD) */

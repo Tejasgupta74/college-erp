@@ -27,8 +27,8 @@ export const getExams = async (req, res) => {
       query.course = { ...(courseId ? { $eq: courseId } : {}), $in: assignedCourseIds };
     }
 
-    const pageNum = Math.max(1, parseInt(page, 10));
-    const limitNum = Math.max(1, parseInt(limit, 10));
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
     const skip = (pageNum - 1) * limitNum;
 
     const [exams, totalCount] = await Promise.all([
@@ -51,7 +51,10 @@ export const getExams = async (req, res) => {
       data: exams,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -136,7 +139,10 @@ export const recordMarks = async (req, res) => {
 
     res.json({ success: true, message: 'Marks recorded successfully', data: updated });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 
@@ -170,7 +176,10 @@ export const getStudentReportCard = async (req, res) => {
 
     res.json({ success: true, data: makeReportCard(exams, studentId) });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
+    });
   }
 };
 

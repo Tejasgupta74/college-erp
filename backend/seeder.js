@@ -15,22 +15,25 @@ dotenv.config();
 
 const seedData = async () => {
   try {
-    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
+    if (process.env.NODE_ENV === 'production') {
       console.error('[Seeder Blocked] Seeder script is strictly prohibited from running when NODE_ENV=production.');
       process.exit(1);
     }
 
     const uri = process.env.MONGODB_URI || '';
-    const isAtlas = uri.includes('mongodb.net');
+    if (!uri) {
+      console.error('[Seeder Error] MONGODB_URI is not configured.');
+      process.exit(1);
+    }
 
     await mongoose.connect(uri);
     const dbName = mongoose.connection.name;
     console.log(`[Seeder] Connected to MongoDB database: "${dbName}"`);
 
-    // Strict guard: Protect live/production databases from accidental data wiping
-    if ((isAtlas || dbName === 'college_erp') && process.env.ALLOW_SEED !== 'true') {
-      console.error(`[Seeder Guard Blocked] Target database "${dbName}" appears to be a production/live cluster.`);
-      console.error('[Seeder Guard Blocked] To explicitly wipe and seed this database, set ALLOW_SEED=true.');
+    // Strict guard: require explicit ALLOW_SEED=true unless in automated test mode
+    if (process.env.NODE_ENV !== 'test' && process.env.ALLOW_SEED !== 'true') {
+      console.error(`[Seeder Guard Blocked] Database wipe and seed is protected.`);
+      console.error('[Seeder Guard Blocked] To explicitly execute the seeder against this database, set ALLOW_SEED=true.');
       process.exit(1);
     }
 
