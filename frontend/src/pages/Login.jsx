@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -6,11 +6,6 @@ import {
   GraduationCap,
   Lock,
   Mail,
-  User,
-  Phone,
-  Building2,
-  UserPlus,
-  LogIn,
   ArrowRight,
   ShieldCheck,
   UserCheck,
@@ -20,22 +15,12 @@ import {
 } from 'lucide-react';
 
 export const Login = () => {
-  // Modes: 'signin' | 'signup' | 'forgot'
-  const [mode, setMode] = useState('signin');
+  // Modes: 'signin' | 'forgot'
+  const [isForgot, setIsForgot] = useState(false);
 
-  // Sign In / General fields
+  // Form fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
-  // Sign Up fields
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
-  const [semester, setSemester] = useState(1);
-  const [rollNo, setRollNo] = useState('');
-  const [departments, setDepartments] = useState([]);
-
-  // Reset Password fields (No tokens needed)
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -43,32 +28,8 @@ export const Login = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login, register } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
-
-  // Load public department list for registration
-  useEffect(() => {
-    const fetchDepartments = async () => {
-      try {
-        const res = await api.get('/auth/departments');
-        if (res.data?.departments?.length) {
-          setDepartments(res.data.departments);
-          if (!departmentId) {
-            setDepartmentId(res.data.departments[0]._id);
-          }
-        }
-      } catch (err) {
-        console.warn('Could not load public departments:', err.message);
-      }
-    };
-    fetchDepartments();
-  }, [departmentId]);
-
-  const switchMode = (newMode) => {
-    setMode(newMode);
-    setError('');
-    setSuccess('');
-  };
 
   // Sign In Handler
   const handleSignIn = async (e) => {
@@ -81,37 +42,6 @@ export const Login = () => {
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Invalid institutional credentials');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Sign Up / Self-Registration Handler
-  const handleSignUp = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await register({
-        name,
-        email,
-        password,
-        phone,
-        departmentId: departmentId || (departments[0]?._id ?? undefined),
-        semester: Number(semester) || 1,
-        rollNo: rollNo.trim() || undefined,
-        role: 'student',
-      });
-      navigate('/dashboard');
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Registration failed. Please check your details.');
     } finally {
       setLoading(false);
     }
@@ -143,7 +73,7 @@ export const Login = () => {
       setPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      setMode('signin');
+      setIsForgot(false);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to reset password. Please verify your email.');
     } finally {
@@ -180,67 +110,29 @@ export const Login = () => {
 
         {/* Card */}
         <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-100 p-8">
-          {/* Mode Switch Tabs */}
-          {mode !== 'forgot' && (
-            <div className="flex bg-slate-100 p-1 rounded-2xl mb-6">
-              <button
-                type="button"
-                onClick={() => switchMode('signin')}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                  mode === 'signin'
-                    ? 'bg-white text-indigo-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Sign In</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => switchMode('signup')}
-                className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                  mode === 'signup'
-                    ? 'bg-white text-indigo-700 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Sign Up (Student)</span>
-              </button>
-            </div>
-          )}
-
           {/* Header Info */}
-          <div className="mb-5 flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-slate-800">
-                {mode === 'signin' && 'Sign in to your account'}
-                {mode === 'signup' && 'Student Self-Registration'}
-                {mode === 'forgot' && 'Reset Password'}
+                {isForgot ? 'Reset Password' : 'Sign in to your account'}
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                {mode === 'signin' && 'Enter your institutional credentials to continue'}
-                {mode === 'signup' && 'Create your student account to access the ERP'}
-                {mode === 'forgot' && 'Enter your registered email and choose a new password'}
+                {isForgot
+                  ? 'Enter your institutional email and set your new password directly'
+                  : 'Enter your institutional credentials to continue'}
               </p>
             </div>
-            {mode === 'forgot' ? (
-              <button
-                type="button"
-                onClick={() => switchMode('signin')}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
-              >
-                ← Back
-              </button>
-            ) : mode === 'signin' ? (
-              <button
-                type="button"
-                onClick={() => switchMode('forgot')}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
-              >
-                Forgot?
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setIsForgot(!isForgot);
+                setError('');
+                setSuccess('');
+              }}
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+            >
+              {isForgot ? '← Back to Login' : 'Forgot?'}
+            </button>
           </div>
 
           {/* Feedback Alerts */}
@@ -258,8 +150,8 @@ export const Login = () => {
             </div>
           )}
 
-          {/* 1. SIGN IN FORM */}
-          {mode === 'signin' && (
+          {/* SIGN IN FORM */}
+          {!isForgot ? (
             <form onSubmit={handleSignIn} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
@@ -310,155 +202,8 @@ export const Login = () => {
                 )}
               </button>
             </form>
-          )}
-
-          {/* 2. SIGN UP FORM */}
-          {mode === 'signup' && (
-            <form onSubmit={handleSignUp} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. John Doe"
-                    required
-                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                  Institutional Email
-                </label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="student.name@college.edu"
-                    required
-                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Minimum 6 characters"
-                    required
-                    className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                    Department
-                  </label>
-                  <div className="relative">
-                    <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                    <select
-                      value={departmentId}
-                      onChange={(e) => setDepartmentId(e.target.value)}
-                      className="w-full pl-9 pr-2 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
-                    >
-                      {departments.length > 0 ? (
-                        departments.map((d) => (
-                          <option key={d._id} value={d._id}>
-                            {d.name} ({d.code})
-                          </option>
-                        ))
-                      ) : (
-                        <option value="">Default Department</option>
-                      )}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                    Semester
-                  </label>
-                  <select
-                    value={semester}
-                    onChange={(e) => setSemester(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
-                  >
-                    {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
-                      <option key={s} value={s}>
-                        Semester {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                    Phone (Optional)
-                  </label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+91..."
-                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1 uppercase tracking-wider">
-                    Roll No (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={rollNo}
-                    onChange={(e) => setRollNo(e.target.value)}
-                    placeholder="Auto-generated if empty"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              >
-                {loading ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                ) : (
-                  <>
-                    <UserPlus className="w-4 h-4" />
-                    <span>Create Student Account</span>
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          {/* 3. FORGOT PASSWORD FORM (Direct Reset - No Token Generation) */}
-          {mode === 'forgot' && (
+          ) : (
+            /* DIRECT PASSWORD RESET FORM (No token required) */
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
@@ -526,7 +271,7 @@ export const Login = () => {
           )}
 
           {/* Quick Demo Logins Section (Development Only) */}
-          {mode === 'signin' && import.meta.env.MODE !== 'production' && (
+          {!isForgot && import.meta.env.MODE !== 'production' && (
             <div className="mt-8 pt-6 border-t border-slate-100">
               <p className="text-xs font-semibold text-slate-500 text-center uppercase tracking-wider mb-3">
                 ⚡ Demo 1-Click Access (Dev Mode)

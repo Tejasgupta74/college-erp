@@ -52,7 +52,7 @@ college-erp/
 │   ├── models/                    # Mongoose schemas with compound indexes
 │   ├── routes/                    # Protected REST endpoint routing
 │   ├── tests/
-│   │   └── api.test.js            # Node test runner suite (12 integration test suites)
+│   │   └── api.test.js            # Node test runner suite (10 integration test suites)
 │   ├── utils/                     # Token generators and audit log helpers
 │   ├── Dockerfile                 # Multi-stage production container
 │   ├── seeder.js                  # Dev-only database seeder (blocked in prod)
