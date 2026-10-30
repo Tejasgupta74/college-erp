@@ -34,7 +34,4 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: college-erp-backend
-          property: host
+        value: https://college-erp-backend-hj58.onrender.com

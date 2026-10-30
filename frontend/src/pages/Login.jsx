@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import api from '../api/axios';
+import api, { DEFAULT_BACKEND_URL } from '../api/axios';
 import {
   GraduationCap,
   Lock,
@@ -12,6 +12,9 @@ import {
   BookOpen,
   CreditCard,
   CheckCircle2,
+  Server,
+  Settings,
+  RefreshCw,
 } from 'lucide-react';
 
 export const Login = () => {
@@ -28,8 +31,56 @@ export const Login = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Backend API URL Configuration
+  const [showApiConfig, setShowApiConfig] = useState(false);
+  const [customApiUrl, setCustomApiUrl] = useState(
+    () => localStorage.getItem('erp_api_url') || import.meta.env.VITE_API_URL || DEFAULT_BACKEND_URL
+  );
+  const [apiTesting, setApiTesting] = useState(false);
+  const [apiStatus, setApiStatus] = useState(null); // { online: boolean, message: string }
+
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const handleTestApi = async (url) => {
+    setApiTesting(true);
+    setApiStatus(null);
+    try {
+      const target = (url || customApiUrl || '').trim();
+      const withProto = target.startsWith('http://') || target.startsWith('https://')
+        ? target
+        : target ? `https://${target}` : window.location.origin;
+      const endpoint = `${withProto.replace(/\/$/, '')}/api/health`;
+
+      const res = await fetch(endpoint);
+      const data = await res.json();
+      if (data.status === 'online') {
+        setApiStatus({ online: true, message: `Connected to ${data.system || 'API'} (Database: ${data.database})` });
+        return true;
+      }
+      setApiStatus({ online: false, message: 'Server responded, but status is degraded.' });
+      return false;
+    } catch (err) {
+      setApiStatus({ online: false, message: 'Cannot reach server: ' + err.message });
+      return false;
+    } finally {
+      setApiTesting(false);
+    }
+  };
+
+  const handleSaveApiUrl = () => {
+    const trimmed = customApiUrl.trim();
+    if (trimmed) {
+      const formatted = trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `https://${trimmed}`;
+      localStorage.setItem('erp_api_url', formatted);
+      setCustomApiUrl(formatted);
+      setSuccess('Backend API URL saved! Testing connection...');
+      handleTestApi(formatted);
+    } else {
+      localStorage.removeItem('erp_api_url');
+      setSuccess('Reset API URL to default.');
+    }
+  };
 
   // Sign In Handler
   const handleSignIn = async (e) => {
@@ -41,7 +92,12 @@ export const Login = () => {
       await login(email, password);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Invalid institutional credentials');
+      if (err.isHtmlResponse || err.message?.includes('Backend API not reached')) {
+        setError('Backend API is not reached. Please verify your Render Backend URL below.');
+        setShowApiConfig(true);
+      } else {
+        setError(err.response?.data?.message || err.message || 'Invalid institutional credentials');
+      }
     } finally {
       setLoading(false);
     }
@@ -75,7 +131,12 @@ export const Login = () => {
       setConfirmPassword('');
       setIsForgot(false);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to reset password. Please verify your email.');
+      if (err.isHtmlResponse || err.message?.includes('Backend API not reached')) {
+        setError('Backend API is not reached. Please verify your Render Backend URL below.');
+        setShowApiConfig(true);
+      } else {
+        setError(err.response?.data?.message || 'Failed to reset password. Please verify your email.');
+      }
     } finally {
       setLoading(false);
     }
@@ -90,7 +151,12 @@ export const Login = () => {
       await login(demoEmail, demoPass);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Quick login failed');
+      if (err.isHtmlResponse || err.message?.includes('Backend API not reached')) {
+        setError('Backend API is not reachable. Please connect your Render Backend Web Service below.');
+        setShowApiConfig(true);
+      } else {
+        setError(err.response?.data?.message || 'Quick login failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -327,6 +393,70 @@ export const Login = () => {
               </div>
             </div>
           )}
+
+          {/* Backend Connection Config Drawer */}
+          <div className="mt-6 pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowApiConfig(!showApiConfig)}
+              className="w-full text-center text-xs text-slate-500 hover:text-slate-800 font-medium flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5 text-slate-400" />
+              <span>{showApiConfig ? 'Hide Backend Server Settings' : 'Configure Backend API Server'}</span>
+            </button>
+
+            {showApiConfig && (
+              <div className="mt-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    Render Backend Web Service URL
+                  </label>
+                  <input
+                    type="url"
+                    value={customApiUrl}
+                    onChange={(e) => setCustomApiUrl(e.target.value)}
+                    placeholder="https://your-backend.onrender.com"
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Paste the URL of your deployed Render backend web service here.
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveApiUrl}
+                    className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold text-xs transition-colors"
+                  >
+                    Save & Apply
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTestApi(customApiUrl)}
+                    disabled={apiTesting}
+                    className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg font-semibold text-xs flex items-center gap-1 transition-colors"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${apiTesting ? 'animate-spin' : ''}`} />
+                    <span>Test</span>
+                  </button>
+                </div>
+
+                {apiStatus && (
+                  <div
+                    className={`p-2 rounded-lg text-[11px] font-medium ${
+                      apiStatus.online
+                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                        : 'bg-rose-50 text-rose-800 border border-rose-200'
+                    }`}
+                  >
+                    {apiStatus.online ? '🟢 ' : '🔴 '}
+                    {apiStatus.message}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-6 font-medium">

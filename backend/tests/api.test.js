@@ -39,10 +39,10 @@ describe('College ERP Production Architecture & API Test Suite', () => {
       spawnedServer = spawn('node', ['server.js'], {
         cwd: backendDir,
         env: { ...process.env, PORT: String(PORT) },
-        stdio: 'ignore',
+        stdio: 'inherit',
       });
 
-      for (let i = 0; i < 25; i++) {
+      for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 1000));
         isOnline = await checkServerHealth();
         if (isOnline) break;
@@ -62,6 +62,7 @@ describe('College ERP Production Architecture & API Test Suite', () => {
       body: JSON.stringify({ email: 'admin@college.edu', password: 'Admin@123' }),
     });
     const adminData = await adminRes.json();
+    assert.equal(adminRes.status, 200, `Admin login failed: ${JSON.stringify(adminData)}`);
     adminToken = adminData.token;
 
     // 2. Authenticate Faculty
@@ -71,6 +72,7 @@ describe('College ERP Production Architecture & API Test Suite', () => {
       body: JSON.stringify({ email: 'prof.sharma@college.edu', password: 'Faculty@123' }),
     });
     const facultyData = await facultyRes.json();
+    assert.equal(facultyRes.status, 200, `Faculty login failed: ${JSON.stringify(facultyData)}`);
     facultyToken = facultyData.token;
 
     // 3. Authenticate Student
@@ -80,6 +82,7 @@ describe('College ERP Production Architecture & API Test Suite', () => {
       body: JSON.stringify({ email: 'student@college.edu', password: 'Student@123' }),
     });
     const studentData = await studentRes.json();
+    assert.equal(studentRes.status, 200, `Student login failed: ${JSON.stringify(studentData)}`);
     studentToken = studentData.token;
 
     // 4. Authenticate Accountant
@@ -89,6 +92,7 @@ describe('College ERP Production Architecture & API Test Suite', () => {
       body: JSON.stringify({ email: 'accountant@college.edu', password: 'Accountant@123' }),
     });
     const accData = await accRes.json();
+    assert.equal(accRes.status, 200, `Accountant login failed: ${JSON.stringify(accData)}`);
     accountantToken = accData.token;
   });
 

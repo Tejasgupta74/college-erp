@@ -37,11 +37,11 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      - name: Seed Database
+      - name: Seed Test Database
         working-directory: backend
         env:
           PORT: 8000
-          MONGODB_URI: mongodb://localhost:27017/college_erp_test
+          MONGODB_URI: mongodb://127.0.0.1:27017/college_erp_test
           JWT_SECRET: testing_jwt_super_secret_key_minimum_32_characters_2026
           NODE_ENV: test
         run: npm run seed
@@ -50,7 +50,7 @@ jobs:
         working-directory: backend
         env:
           PORT: 8000
-          MONGODB_URI: mongodb://localhost:27017/college_erp_test
+          MONGODB_URI: mongodb://127.0.0.1:27017/college_erp_test
           JWT_SECRET: testing_jwt_super_secret_key_minimum_32_characters_2026
           NODE_ENV: test
         run: npm test
