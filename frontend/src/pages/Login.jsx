@@ -1,25 +1,72 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { GraduationCap, Lock, Mail, ArrowRight, ShieldCheck, UserCheck, BookOpen, CreditCard } from 'lucide-react';
+import api from '../api/axios';
+import { GraduationCap, Lock, Mail, ArrowRight, ShieldCheck, UserCheck, BookOpen, CreditCard, KeyRound, CheckCircle2 } from 'lucide-react';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Forgot password flow state
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotStep, setForgotStep] = useState(1); // 1 = request token, 2 = reset password
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
     try {
       await login(email, password);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Invalid credentials');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestReset = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const res = await api.post('/auth/forgot-password', { email });
+      setSuccess('Verification reset token generated!');
+      if (res.data?.resetToken) {
+        setResetToken(res.data.resetToken);
+      }
+      setForgotStep(2);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to request password reset');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePerformReset = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const res = await api.post('/auth/reset-password', { resetToken, newPassword });
+      setSuccess(res.data?.message || 'Password reset successfully! Please sign in with your new password.');
+      setShowForgot(false);
+      setForgotStep(1);
+      setPassword('');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to reset password');
     } finally {
       setLoading(false);
     }
@@ -48,15 +95,34 @@ export const Login = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-200 mb-4">
             <GraduationCap className="w-9 h-9" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Apex Institute of Technology</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">College ERP System</h1>
           <p className="text-sm text-slate-500 mt-1 font-medium">Enterprise Resource Planning Portal</p>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-100 p-8">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-800">Sign in to your account</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Enter your institutional credentials to continue</p>
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800">
+                {showForgot ? 'Reset Password' : 'Sign in to your account'}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {showForgot
+                  ? 'Verify institutional token to set a new password'
+                  : 'Enter your institutional credentials to continue'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowForgot(!showForgot);
+                setError('');
+                setSuccess('');
+              }}
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+            >
+              {showForgot ? '← Back to Login' : 'Forgot?'}
+            </button>
           </div>
 
           {error && (
@@ -66,7 +132,100 @@ export const Login = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {success && (
+            <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              {success}
+            </div>
+          )}
+
+          {showForgot ? (
+            /* Forgot Password Flow */
+            forgotStep === 1 ? (
+              <form onSubmit={handleRequestReset} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
+                    Institutional Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@college.edu"
+                      required
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full mt-2 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-indigo-200 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <span>Generate Reset Token</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handlePerformReset} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
+                    Verification Reset Token
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="text"
+                      value={resetToken}
+                      onChange={(e) => setResetToken(e.target.value)}
+                      placeholder="Enter verification token"
+                      required
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
+                    New Secure Password
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      required
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full mt-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-emerald-200 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <span>Set New Password</span>
+                  )}
+                </button>
+              </form>
+            )
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5 uppercase tracking-wider">
                 Institutional Email
@@ -116,62 +275,65 @@ export const Login = () => {
               )}
             </button>
           </form>
+          )}
 
-          {/* Quick Demo Logins Section */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 text-center uppercase tracking-wider mb-3">
-              ⚡ Demo 1-Click Access
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('admin@college.edu', 'Admin@123')}
-                className="p-2.5 border border-rose-200 bg-rose-50/50 hover:bg-rose-100/70 text-rose-800 rounded-xl font-medium flex items-center gap-2 transition-colors text-left"
-              >
-                <ShieldCheck className="w-4 h-4 text-rose-600 flex-shrink-0" />
-                <div className="truncate">
-                  <div className="font-bold">Super Admin</div>
-                  <div className="text-[10px] text-rose-600">admin@college.edu</div>
-                </div>
-              </button>
+          {/* Quick Demo Logins Section (Development Only) */}
+          {import.meta.env.MODE !== 'production' && (
+            <div className="mt-8 pt-6 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 text-center uppercase tracking-wider mb-3">
+                ⚡ Demo 1-Click Access (Dev Mode)
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('admin@college.edu', 'Admin@123')}
+                  className="p-2.5 border border-rose-200 bg-rose-50/50 hover:bg-rose-100/70 text-rose-800 rounded-xl font-medium flex items-center gap-2 transition-colors text-left"
+                >
+                  <ShieldCheck className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                  <div className="truncate">
+                    <div className="font-bold">Super Admin</div>
+                    <div className="text-[10px] text-rose-600">admin@college.edu</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('prof.sharma@college.edu', 'Faculty@123')}
-                className="p-2.5 border border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 text-amber-800 rounded-xl font-medium flex items-center gap-2 transition-colors text-left"
-              >
-                <BookOpen className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <div className="truncate">
-                  <div className="font-bold">Faculty (HOD)</div>
-                  <div className="text-[10px] text-amber-600">prof.sharma@...</div>
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('prof.sharma@college.edu', 'Faculty@123')}
+                  className="p-2.5 border border-amber-200 bg-amber-50/50 hover:bg-amber-100/70 text-amber-800 rounded-xl font-medium flex items-center gap-2 transition-colors text-left"
+                >
+                  <BookOpen className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <div className="truncate">
+                    <div className="font-bold">Faculty (HOD)</div>
+                    <div className="text-[10px] text-amber-600">prof.sharma@...</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('student@college.edu', 'Student@123')}
-                className="p-2.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/70 text-emerald-800 rounded-xl font-medium flex items-center gap-2 transition-colors text-left"
-              >
-                <UserCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                <div className="truncate">
-                  <div className="font-bold">Student</div>
-                  <div className="text-[10px] text-emerald-600">student@college.edu</div>
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('student@college.edu', 'Student@123')}
+                  className="p-2.5 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/70 text-emerald-800 rounded-xl font-medium flex items-center gap-2 transition-colors text-left"
+                >
+                  <UserCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  <div className="truncate">
+                    <div className="font-bold">Student</div>
+                    <div className="text-[10px] text-emerald-600">student@college.edu</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('accountant@college.edu', 'Accountant@123')}
-                className="p-2.5 border border-blue-200 bg-blue-50/50 hover:bg-blue-100/70 text-blue-800 rounded-xl font-medium flex items-center gap-2 transition-colors text-left"
-              >
-                <CreditCard className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                <div className="truncate">
-                  <div className="font-bold">Accounts Officer</div>
-                  <div className="text-[10px] text-blue-600">accountant@...</div>
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickLogin('accountant@college.edu', 'Accountant@123')}
+                  className="p-2.5 border border-blue-200 bg-blue-50/50 hover:bg-blue-100/70 text-blue-800 rounded-xl font-medium flex items-center gap-2 transition-colors text-left"
+                >
+                  <CreditCard className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                  <div className="truncate">
+                    <div className="font-bold">Accounts Officer</div>
+                    <div className="text-[10px] text-blue-600">accountant@...</div>
+                  </div>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-6 font-medium">

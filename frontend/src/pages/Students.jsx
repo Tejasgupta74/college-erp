@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import { Plus, Search, Mail, CheckCircle, AlertCircle, Eye } from 'lucide-react';
+import { Plus, Search, Mail, CheckCircle, AlertCircle, Eye, Download, FileSpreadsheet } from 'lucide-react';
 import StudentDossierModal from '../components/StudentDossierModal';
+import { exportToExcel, exportToCSV } from '../utils/exportUtils';
 
 const initialStudentForm = {
   name: '',
@@ -75,6 +76,30 @@ export const Students = () => {
     }
   };
 
+  const handleExportData = (format) => {
+    if (!students.length) return;
+    const formattedData = students.map((s, idx) => ({
+      'S.No': idx + 1,
+      'Name': s.user?.name || 'N/A',
+      'Roll Number': s.rollNo || 'N/A',
+      'Enrollment': s.enrollmentNo || 'N/A',
+      'Department': s.department?.name || 'N/A',
+      'Semester': s.semester || 'N/A',
+      'Section': s.section || 'A',
+      'Email': s.user?.email || 'N/A',
+      'Phone': s.user?.phone || 'N/A',
+      'Batch Year': s.batchYear || 'N/A',
+      'Guardian Name': s.guardianName || 'N/A',
+    }));
+
+    const filename = `Students_Export_${new Date().toISOString().slice(0, 10)}`;
+    if (format === 'csv') {
+      exportToCSV(formattedData, filename);
+    } else {
+      exportToExcel(formattedData, filename, 'Students Directory');
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -84,14 +109,33 @@ export const Students = () => {
           <p className="text-sm text-slate-500 mt-1">Enrollment dossiers, academic tracking, and student information</p>
         </div>
 
-        {user?.role === 'admin' && (
+        <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setShowModal(true)}
-            className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm shadow-md shadow-indigo-100 transition-colors"
+            onClick={() => handleExportData('xlsx')}
+            disabled={!students.length}
+            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-xl text-xs shadow-sm transition-colors disabled:opacity-50"
+            title="Export as Excel"
           >
-            <Plus className="w-4 h-4" /> Enroll New Student
+            <FileSpreadsheet className="w-3.5 h-3.5" /> Export Excel
           </button>
-        )}
+          <button
+            onClick={() => handleExportData('csv')}
+            disabled={!students.length}
+            className="inline-flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white font-semibold px-3 py-2 rounded-xl text-xs shadow-sm transition-colors disabled:opacity-50"
+            title="Export as CSV"
+          >
+            <Download className="w-3.5 h-3.5" /> CSV
+          </button>
+
+          {user?.role === 'admin' && (
+            <button
+              onClick={() => setShowModal(true)}
+              className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm shadow-md shadow-indigo-100 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Enroll New Student
+            </button>
+          )}
+        </div>
       </div>
 
       {statusMsg.text && (

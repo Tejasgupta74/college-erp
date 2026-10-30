@@ -3,15 +3,25 @@ import User from '../models/User.js';
 import Attendance from '../models/Attendance.js';
 import Fee from '../models/Fee.js';
 import Exam from '../models/Exam.js';
+import Course from '../models/Course.js';
 
 export const getStudents = async (req, res) => {
   try {
-    const { department, semester, search } = req.query;
+    const { department, semester, section, search, page = 1, limit = 20 } = req.query;
     const query = {};
     if (department) query.department = department;
     if (semester) query.semester = Number(semester);
+    if (section) query.section = section;
 
-    let profiles = await StudentProfile.find(query)
+    if (req.user.role === 'faculty') {
+      const assignedCourses = await Course.find({ faculty: req.user._id }).select('department semester');
+      const assignments = assignedCourses.map((course) => ({ department: course.department, semester: course.semester }));
+      query.$or = assignments.length ? assignments : [{ _id: null }];
+    }
+
+    let profileQuery = StudentProfile.find(query);
+    if (req.user.role === 'faculty') profileQuery = profileQuery.select('user enrollmentNo rollNo department semester section batchYear');
+    let profiles = await profileQuery
       .populate('user', 'name email phone avatar isActive')
       .populate('department', 'name code')
       .sort({ rollNo: 1 });
@@ -25,7 +35,21 @@ export const getStudents = async (req, res) => {
         p.enrollmentNo?.toLowerCase().includes(s)
       );
     }
-    res.json({ success: true, count: profiles.length, data: profiles });
+
+    const totalCount = profiles.length;
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.max(1, parseInt(limit, 10));
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginatedProfiles = profiles.slice(startIndex, startIndex + limitNum);
+
+    res.json({
+      success: true,
+      count: paginatedProfiles.length,
+      total: totalCount,
+      page: pageNum,
+      pages: Math.ceil(totalCount / limitNum),
+      data: paginatedProfiles,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -40,11 +64,22 @@ export const getStudentById = async (req, res) => {
     if (!profile) return res.status(404).json({ success: false, message: 'Student profile not found' });
     const studentUserId = (profile.user?._id || profile.user || '').toString();
 
+    if (req.user.role === 'student' && studentUserId !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'You can only view your own student record' });
+    }
+    let facultyCourseIds = [];
+    if (req.user.role === 'faculty') {
+      const assignedCourses = await Course.find({ faculty: req.user._id, department: profile.department?._id || profile.department, semester: profile.semester }).select('_id');
+      facultyCourseIds = assignedCourses.map((course) => course._id);
+      const assigned = facultyCourseIds.length > 0;
+      if (!assigned) return res.status(403).json({ success: false, message: 'You can only view students in your assigned courses' });
+    }
+
     // Fetch student's attendance summary, fees, and exams concurrently
     const [attendances, fees, exams] = await Promise.all([
-      studentUserId ? Attendance.find({ 'records.student': studentUserId }).populate('course', 'name code') : [],
-      studentUserId ? Fee.find({ student: studentUserId }).sort({ createdAt: -1 }) : [],
-      studentUserId ? Exam.find({ 'results.student': studentUserId }).populate('course', 'name code') : [],
+      studentUserId ? Attendance.find({ 'records.student': studentUserId, ...(req.user.role === 'faculty' ? { course: { $in: facultyCourseIds } } : {}) }).populate('course', 'name code') : [],
+      studentUserId && req.user.role !== 'faculty' ? Fee.find({ student: studentUserId }).sort({ createdAt: -1 }) : [],
+      studentUserId ? Exam.find({ 'results.student': studentUserId, ...(req.user.role === 'faculty' ? { course: { $in: facultyCourseIds } } : {}) }).populate('course', 'name code') : [],
     ]);
 
     const totalClasses = attendances.length;

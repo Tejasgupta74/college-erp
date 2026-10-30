@@ -9,7 +9,10 @@ import {
   Save,
   CheckCircle,
   AlertCircle,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { exportToExcel, exportToCSV } from '../utils/exportUtils';
 
 export const Attendance = () => {
   const { user } = useAuth();
@@ -69,20 +72,26 @@ export const Attendance = () => {
   // When selectedCourse changes, fetch students in that course's department and semester
   useEffect(() => {
     if (!isStudent && selectedCourse) {
+      let cancelled = false;
       const courseObj = courses.find((c) => c._id === selectedCourse);
       if (courseObj) {
         const fetchStudentsForCourse = async () => {
           try {
-            const res = await api.get(
-              `/students?department=${courseObj.department?._id || courseObj.department}&semester=${courseObj.semester}`
-            );
-            const studentList = res.data.data || [];
+            const departmentId = courseObj.department?._id || courseObj.department;
+            const [studentsRes, attendanceRes] = await Promise.all([
+              api.get(`/students?department=${departmentId}&semester=${courseObj.semester}&section=A`),
+              api.get(`/attendance?courseId=${selectedCourse}&date=${attendanceDate}&section=A`),
+            ]);
+            if (cancelled) return;
+            const studentList = studentsRes.data.data || [];
             setStudents(studentList);
 
-            // Default all students to 'Present'
+            const existing = attendanceRes.data.data?.[0];
+            const savedRecords = new Map((existing?.records || []).map((record) => [String(record.student?._id || record.student), record.status]));
             const initialRecs = {};
-            studentList.forEach((st) => {
-              initialRecs[st.user?._id] = 'Present';
+            studentList.forEach((student) => {
+              const id = student.user?._id;
+              initialRecs[id] = savedRecords.get(id) || 'Present';
             });
             setRecords(initialRecs);
           } catch (err) {
@@ -91,8 +100,9 @@ export const Attendance = () => {
         };
         fetchStudentsForCourse();
       }
+      return () => { cancelled = true; };
     }
-  }, [selectedCourse, courses, isStudent]);
+  }, [selectedCourse, courses, isStudent, attendanceDate]);
 
   const handleStatusChange = (studentUserId, status) => {
     setRecords((prev) => ({ ...prev, [studentUserId]: status }));
@@ -135,11 +145,48 @@ export const Attendance = () => {
 
   // STUDENT VIEW
   if (isStudent) {
+    const handleExportStudentAttendance = (format) => {
+      if (!studentSummary?.breakdown?.length) return;
+      const formatted = studentSummary.breakdown.map((item, idx) => ({
+        'S.No': idx + 1,
+        'Course Code': item.courseCode,
+        'Course Name': item.courseName,
+        'Attended': item.present,
+        'Total Lectures': item.total,
+        'Missed': item.absent,
+        'Attendance (%)': item.percentage,
+        'Eligibility Status': item.percentage >= 75 ? 'Eligible' : 'Debarred / Shortage',
+      }));
+
+      const filename = `My_Attendance_Report_${new Date().toISOString().slice(0, 10)}`;
+      if (format === 'csv') exportToCSV(formatted, filename);
+      else exportToExcel(formatted, filename, 'Attendance Summary');
+    };
+
     return (
       <div className="space-y-6 max-w-7xl mx-auto">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Attendance Dossier</h1>
-          <p className="text-sm text-slate-500 mt-1">Official lecture presence logs and semester eligibility status</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">My Attendance Dossier</h1>
+            <p className="text-sm text-slate-500 mt-1">Official lecture presence logs and semester eligibility status</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleExportStudentAttendance('xlsx')}
+              disabled={!studentSummary?.breakdown?.length}
+              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-xl text-xs shadow-sm transition-colors disabled:opacity-50"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" /> Export Excel
+            </button>
+            <button
+              onClick={() => handleExportStudentAttendance('csv')}
+              disabled={!studentSummary?.breakdown?.length}
+              className="inline-flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white font-semibold px-3 py-2 rounded-xl text-xs shadow-sm transition-colors disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5" /> CSV
+            </button>
+          </div>
         </div>
 
         {studentSummary?.isShortage && (

@@ -18,5 +18,8 @@ const studentProfileSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+studentProfileSchema.index({ department: 1, semester: 1, section: 1 });
+studentProfileSchema.index({ rollNo: 1 });
+
 const StudentProfile = mongoose.model('StudentProfile', studentProfileSchema);
 export default StudentProfile;

@@ -209,7 +209,7 @@ export const CommandSearch = ({ isOpen, onClose }) => {
         {/* Footer */}
         <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 px-4">
           <span>Tip: Press <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px]">ESC</kbd> to close</span>
-          <span>Apex ERP Spotlight Search</span>
+          <span>College ERP System Spotlight Search</span>
         </div>
       </div>
     </div>

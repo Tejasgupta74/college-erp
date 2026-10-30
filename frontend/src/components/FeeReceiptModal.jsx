@@ -1,9 +1,19 @@
-import { X, Printer, GraduationCap } from 'lucide-react';
+import { X, Printer, GraduationCap, Download } from 'lucide-react';
+import { exportFeeReceiptPDF } from '../utils/exportUtils';
 
 export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
   if (!isOpen || !fee) return null;
 
   const handlePrint = () => window.print();
+  const handleDownloadPDF = () => {
+    exportFeeReceiptPDF({
+      ...fee,
+      amount: fee.paidAmount,
+      breakdown: {
+        [fee.title || 'Tuition & Academic Fees']: fee.paidAmount,
+      },
+    });
+  };
 
   const latestPayment = fee.payments && fee.payments.length > 0 ? fee.payments[fee.payments.length - 1] : null;
   const receiptNo = latestPayment?.receiptNo || `REC-${fee._id?.toString()?.slice(-6)?.toUpperCase() || '000000'}`;
@@ -18,6 +28,12 @@ export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
         <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between print:hidden">
           <span className="font-bold text-xs uppercase tracking-wider text-slate-600">Official Fee Receipt</span>
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadPDF}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" /> Download PDF
+            </button>
             <button
               onClick={handlePrint}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
@@ -39,7 +55,7 @@ export const FeeReceiptModal = ({ isOpen, onClose, fee }) => {
                 <GraduationCap className="w-7 h-7" />
               </div>
               <div>
-                <h2 className="font-extrabold text-lg text-slate-900 tracking-tight leading-none">Apex Institute of Technology</h2>
+                <h2 className="font-extrabold text-lg text-slate-900 tracking-tight leading-none">College ERP System</h2>
                 <p className="text-[11px] text-slate-500 mt-1 font-medium">Affiliated to State Technical University • Accredited 'A+' Grade</p>
                 <p className="text-[10px] text-slate-400">Campus: Knowledge City, Tech Zone 4 • finance@college.edu</p>
               </div>

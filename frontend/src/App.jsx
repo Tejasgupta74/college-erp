@@ -44,14 +44,22 @@ export default function App() {
                 <Route element={<DashboardLayout />}>
                   <Route path="/" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/courses" element={<Courses />} />
-                  <Route path="/attendance" element={<Attendance />} />
+                  <Route element={<ProtectedRoute allowedRoles={['admin', 'faculty', 'student']} />}>
+                    <Route path="/courses" element={<Courses />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['admin', 'faculty', 'student']} />}>
+                    <Route path="/attendance" element={<Attendance />} />
+                    <Route path="/exams" element={<Exams />} />
+                  </Route>
                   <Route path="/fees" element={<Fees />} />
-                  <Route path="/exams" element={<Exams />} />
                   <Route path="/notices" element={<Notices />} />
-                  <Route path="/departments" element={<Departments />} />
-                  <Route path="/students" element={<Students />} />
-                  <Route path="/faculty" element={<Faculty />} />
+                  <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+                    <Route path="/departments" element={<Departments />} />
+                    <Route path="/faculty" element={<Faculty />} />
+                  </Route>
+                  <Route element={<ProtectedRoute allowedRoles={['admin', 'faculty', 'accountant']} />}>
+                    <Route path="/students" element={<Students />} />
+                  </Route>
                 </Route>
               </Route>
 

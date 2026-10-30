@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import User from '../models/User.js';
 import StudentProfile from '../models/StudentProfile.js';
 import FacultyProfile from '../models/FacultyProfile.js';
@@ -34,7 +35,18 @@ export const login = async (req, res) => {
     if (!user.isActive) return res.status(403).json({ success: false, message: 'Your account has been deactivated. Contact Admin.' });
 
     const profile = await getProfileForUser(user);
-    res.json({ success: true, token: generateToken(user._id), user: formatUserResponse(user, profile) });
+    const token = generateToken(user._id);
+
+    // Set secure HTTP-only cookie
+    const isProd = process.env.NODE_ENV === 'production';
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'strict' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    res.json({ success: true, token, user: formatUserResponse(user, profile) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -78,15 +90,15 @@ export const createUser = async (req, res) => {
       if (role === 'student') {
         profile = await StudentProfile.create({
           user: user._id,
-          enrollmentNo: enrollmentNo || `ENR${Date.now().toString().slice(-6)}`,
-          rollNo: rollNo || `R${Date.now().toString().slice(-4)}`,
+          enrollmentNo: enrollmentNo || `ENR${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
+          rollNo: rollNo || `R${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
           department: departmentId,
           semester, section, batchYear, guardianName, guardianPhone,
         });
       } else if (role === 'faculty') {
         profile = await FacultyProfile.create({
           user: user._id,
-          employeeId: employeeId || `EMP${Date.now().toString().slice(-5)}`,
+          employeeId: employeeId || `EMP${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
           department: departmentId,
           designation, qualification,
         });
@@ -102,7 +114,8 @@ export const createUser = async (req, res) => {
       user: { _id: user._id, name: user.name, email: user.email, role: user.role, profile },
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    const clientError = error.code === 11000 || ['ValidationError', 'CastError'].includes(error.name);
+    res.status(clientError ? 400 : 500).json({ success: false, message: error.message });
   }
 };
 
@@ -127,4 +140,79 @@ export const changePassword = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
+};
+
+// @desc    Forgot Password - Request reset code
+// @route   POST /api/auth/forgot-password
+// @access  Public
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ success: false, message: 'Please provide email address' });
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Respond with success to prevent user enumeration
+      return res.json({ success: true, message: 'If an account exists with this email, a reset token has been issued.' });
+    }
+
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 mins expiry
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Reset token generated successfully.',
+      resetToken, // Returned directly for immediate in-app reset confirmation
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Reset Password using token
+// @route   POST /api/auth/reset-password
+// @access  Public
+export const resetPassword = async (req, res) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+    if (!resetToken || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Reset token and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired password reset token' });
+    }
+
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    res.json({ success: true, message: 'Password has been reset successfully. You can now login.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Logout user & clear cookie
+// @route   POST /api/auth/logout
+// @access  Public
+export const logout = async (req, res) => {
+  res.cookie('token', '', {
+    httpOnly: true,
+    expires: new Date(0),
+  });
+  res.json({ success: true, message: 'Logged out successfully' });
 };

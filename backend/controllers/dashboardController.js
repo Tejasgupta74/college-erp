@@ -86,7 +86,7 @@ export const getDashboardStats = async (req, res) => {
       const [profile, fees, recentNotices, sessions, exams] = await Promise.all([
         StudentProfile.findOne({ user: userId }).populate('department', 'name code'),
         Fee.find({ student: userId }),
-        Notice.find({ targetAudience: { $in: ['all', 'students'] } }).sort({ createdAt: -1 }).limit(5),
+        Notice.find({ targetAudience: { $in: ['all', 'student', 'students'] } }).sort({ createdAt: -1 }).limit(5),
         Attendance.find({ 'records.student': userId.toString() }).populate('course', 'name code'),
         Exam.find({ 'results.student': userId.toString() }).populate('course', 'name code'),
       ]);

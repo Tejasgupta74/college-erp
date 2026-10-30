@@ -4,7 +4,7 @@ import Course from '../models/Course.js';
 
 export const getFaculty = async (req, res) => {
   try {
-    const { department, search } = req.query;
+    const { department, search, page = 1, limit = 20 } = req.query;
     const query = department ? { department } : {};
 
     let profiles = await FacultyProfile.find(query)
@@ -20,7 +20,21 @@ export const getFaculty = async (req, res) => {
         p.employeeId?.toLowerCase().includes(s)
       );
     }
-    res.json({ success: true, count: profiles.length, data: profiles });
+
+    const totalCount = profiles.length;
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.max(1, parseInt(limit, 10));
+    const startIndex = (pageNum - 1) * limitNum;
+    const paginatedProfiles = profiles.slice(startIndex, startIndex + limitNum);
+
+    res.json({
+      success: true,
+      count: paginatedProfiles.length,
+      total: totalCount,
+      page: pageNum,
+      pages: Math.ceil(totalCount / limitNum),
+      data: paginatedProfiles,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

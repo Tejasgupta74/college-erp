@@ -5,10 +5,12 @@ const BASE_URL = `http://localhost:${process.env.PORT || 8000}/api`;
 
 describe('College ERP Production Architecture & API Test Suite', () => {
   let adminToken = '';
+  let facultyToken = '';
   let studentToken = '';
+  let accountantToken = '';
 
   before(async () => {
-    // Authenticate Admin
+    // 1. Authenticate Admin
     const adminRes = await fetch(`${BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -17,7 +19,16 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     const adminData = await adminRes.json();
     adminToken = adminData.token;
 
-    // Authenticate Student
+    // 2. Authenticate Faculty
+    const facultyRes = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'prof.sharma@college.edu', password: 'Faculty@123' }),
+    });
+    const facultyData = await facultyRes.json();
+    facultyToken = facultyData.token;
+
+    // 3. Authenticate Student
     const studentRes = await fetch(`${BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -25,6 +36,15 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     });
     const studentData = await studentRes.json();
     studentToken = studentData.token;
+
+    // 4. Authenticate Accountant
+    const accRes = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'accountant@college.edu', password: 'Accountant@123' }),
+    });
+    const accData = await accRes.json();
+    accountantToken = accData.token;
   });
 
   test('1. Health Check Endpoint & Correlation ID Injection', async () => {
@@ -38,7 +58,9 @@ describe('College ERP Production Architecture & API Test Suite', () => {
 
   test('2. Authentication Flow & Token Validation', async () => {
     assert.ok(adminToken, 'Admin token should be successfully generated');
+    assert.ok(facultyToken, 'Faculty token should be successfully generated');
     assert.ok(studentToken, 'Student token should be successfully generated');
+    assert.ok(accountantToken, 'Accountant token should be successfully generated');
 
     const meRes = await fetch(`${BASE_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${adminToken}` },
@@ -105,5 +127,36 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     assert.equal(readAllRes.status, 200);
     const readAllData = await readAllRes.json();
     assert.equal(readAllData.success, true);
+  });
+
+  test('7. Attendance Module: Fetch Dossier & Eligibility', async () => {
+    const res = await fetch(`${BASE_URL}/attendance`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.ok(Array.isArray(data.data));
+  });
+
+  test('8. Exams & Grades Module: Fetch Report Card', async () => {
+    const res = await fetch(`${BASE_URL}/exams/report-card/me`, {
+      headers: { Authorization: `Bearer ${studentToken}` },
+    });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.ok(Array.isArray(data.data));
+  });
+
+  test('9. Fees Module: Invoices & Pagination', async () => {
+    const res = await fetch(`${BASE_URL}/fees?page=1&limit=5`, {
+      headers: { Authorization: `Bearer ${accountantToken}` },
+    });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.ok(data.total >= 0);
+    assert.ok(Array.isArray(data.data));
   });
 });

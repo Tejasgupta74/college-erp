@@ -1,4 +1,6 @@
 import Attendance from '../models/Attendance.js';
+import Course from '../models/Course.js';
+import StudentProfile from '../models/StudentProfile.js';
 
 // Helper for date range normalization without mutation
 const getDayRange = (date) => {
@@ -16,8 +18,35 @@ const getDayRange = (date) => {
 export const markAttendance = async (req, res) => {
   try {
     const { courseId, departmentId, date, semester = 1, section = 'A', topicCovered = '', records } = req.body;
-    if (!courseId || !departmentId || !Array.isArray(records)) {
+    if (!courseId || !departmentId || !Array.isArray(records) || records.length === 0) {
       return res.status(400).json({ success: false, message: 'Please provide course, department, and student records' });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
+    if (course.department.toString() !== departmentId || course.semester !== Number(semester)) {
+      return res.status(400).json({ success: false, message: 'Course, department, and semester do not match' });
+    }
+    if (req.user.role === 'faculty' && course.faculty?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'You can only mark attendance for your assigned courses' });
+    }
+    if (date && Number.isNaN(new Date(date).getTime())) {
+      return res.status(400).json({ success: false, message: 'Invalid attendance date' });
+    }
+
+    const studentIds = records.map((record) => record?.student?.toString());
+    if (studentIds.some((id) => !id) || new Set(studentIds).size !== studentIds.length) {
+      return res.status(400).json({ success: false, message: 'Attendance records must contain unique student IDs' });
+    }
+    const allowedStatuses = new Set(['Present', 'Absent', 'Late', 'Excused']);
+    if (records.some((record) => !allowedStatuses.has(record.status || 'Present'))) {
+      return res.status(400).json({ success: false, message: 'Attendance contains an invalid status' });
+    }
+    const rosterCount = await StudentProfile.countDocuments({
+      user: { $in: studentIds }, department: course.department, semester: Number(semester), section,
+    });
+    if (rosterCount !== studentIds.length) {
+      return res.status(400).json({ success: false, message: 'Attendance includes students outside this course section' });
     }
 
     const { sessionDate, startOfDay, endOfDay } = getDayRange(date);
@@ -56,8 +85,13 @@ export const getAttendance = async (req, res) => {
     if (semester) query.semester = Number(semester);
     if (section) query.section = section;
     if (date) {
+      if (Number.isNaN(new Date(date).getTime())) return res.status(400).json({ success: false, message: 'Invalid attendance date' });
       const { startOfDay, endOfDay } = getDayRange(date);
       query.date = { $gte: startOfDay, $lte: endOfDay };
+    }
+    if (req.user.role === 'faculty') {
+      const assignedCourseIds = await Course.find({ faculty: req.user._id }).distinct('_id');
+      query.course = { ...(courseId ? { $eq: courseId } : {}), $in: assignedCourseIds };
     }
 
     const records = await Attendance.find(query)
@@ -78,7 +112,22 @@ export const getAttendance = async (req, res) => {
 export const getStudentAttendanceSummary = async (req, res) => {
   try {
     const studentUserId = (req.params.studentId || req.user._id).toString();
-    const sessions = await Attendance.find({ 'records.student': studentUserId }).populate('course', 'name code credits');
+    if (req.user.role === 'student' && studentUserId !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'You can only view your own attendance' });
+    }
+    if (!['admin', 'faculty', 'student'].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view attendance summaries' });
+    }
+    if (req.user.role === 'faculty') {
+      const profile = await StudentProfile.findOne({ user: studentUserId }).select('department semester');
+      const allowedCourse = profile && await Course.exists({ faculty: req.user._id, department: profile.department, semester: profile.semester });
+      if (!allowedCourse) return res.status(403).json({ success: false, message: 'You can only view students in your assigned courses' });
+    }
+    const sessionQuery = { 'records.student': studentUserId };
+    if (req.user.role === 'faculty') {
+      sessionQuery.course = { $in: await Course.find({ faculty: req.user._id }).distinct('_id') };
+    }
+    const sessions = await Attendance.find(sessionQuery).populate('course', 'name code credits');
 
     const courseStats = {};
     sessions.forEach((session) => {

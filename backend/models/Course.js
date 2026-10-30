@@ -14,5 +14,8 @@ const courseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+courseSchema.index({ department: 1, semester: 1 });
+courseSchema.index({ faculty: 1 });
+
 const Course = mongoose.model('Course', courseSchema);
 export default Course;

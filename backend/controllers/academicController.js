@@ -1,5 +1,6 @@
 import Department from '../models/Department.js';
 import Course from '../models/Course.js';
+import StudentProfile from '../models/StudentProfile.js';
 import { invalidateCache } from '../config/cache.js';
 import { recordAudit } from '../utils/audit.js';
 
@@ -60,7 +61,16 @@ export const getCourses = async (req, res) => {
     const filter = {};
     if (department) filter.department = department;
     if (semester) filter.semester = Number(semester);
-    if (faculty) filter.faculty = faculty;
+    if (req.user.role === 'faculty') {
+      filter.faculty = req.user._id;
+    } else if (req.user.role === 'student') {
+      const profile = await StudentProfile.findOne({ user: req.user._id }).select('department semester');
+      if (!profile) return res.json({ success: true, count: 0, data: [] });
+      filter.department = profile.department;
+      filter.semester = profile.semester;
+    } else if (faculty) {
+      filter.faculty = faculty;
+    }
 
     const courses = await Course.find(filter)
       .populate('department', 'name code')

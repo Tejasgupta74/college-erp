@@ -5,18 +5,34 @@ import Fee from '../models/Fee.js';
 // @access  Private
 export const getFees = async (req, res) => {
   try {
-    const { studentId, status, departmentId } = req.query;
+    const { studentId, status, departmentId, page = 1, limit = 20 } = req.query;
     const query = {};
     if (studentId) query.student = studentId;
     if (status) query.status = status;
     if (departmentId) query.department = departmentId;
 
-    const fees = await Fee.find(query)
-      .populate('student', 'name email phone')
-      .populate('department', 'name code')
-      .sort({ createdAt: -1 });
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.max(1, parseInt(limit, 10));
+    const skip = (pageNum - 1) * limitNum;
 
-    res.json({ success: true, count: fees.length, data: fees });
+    const [fees, totalCount] = await Promise.all([
+      Fee.find(query)
+        .populate('student', 'name email phone')
+        .populate('department', 'name code')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      Fee.countDocuments(query),
+    ]);
+
+    res.json({
+      success: true,
+      count: fees.length,
+      total: totalCount,
+      page: pageNum,
+      pages: Math.ceil(totalCount / limitNum),
+      data: fees,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -1,9 +1,32 @@
-import { X, Printer, GraduationCap } from 'lucide-react';
+import { X, Printer, GraduationCap, Download } from 'lucide-react';
+import { exportMarksheetPDF } from '../utils/exportUtils';
 
 export const TranscriptModal = ({ isOpen, onClose, reportCard, studentProfile, userName }) => {
   if (!isOpen || !Array.isArray(reportCard)) return null;
 
   const handlePrint = () => window.print();
+  const handleDownloadPDF = () => {
+    const student = {
+      name: userName || studentProfile?.user?.name || 'Student',
+      rollNo: studentProfile?.rollNo || studentProfile?.enrollmentNo || 'Roll-N/A',
+      enrollmentNo: studentProfile?.enrollmentNo,
+      department: studentProfile?.department,
+    };
+    const exam = {
+      name: 'Semester Marksheet & Grade Report',
+      semester: studentProfile?.semester || 1,
+      academicYear: studentProfile?.batchYear || '2024-2028',
+      type: 'End-Term Institutional Evaluation',
+    };
+    const results = reportCard.map((item) => ({
+      subjectCode: item.courseCode || 'SUB',
+      subjectName: item.courseName || 'Course Subject',
+      maxMarks: item.maxMarks || 100,
+      marksObtained: item.marksObtained ?? 'Ab',
+      grade: item.grade || 'P',
+    }));
+    exportMarksheetPDF(exam, student, results);
+  };
 
   const gradePointsMap = { 'A+': 10, 'A': 9, 'B': 8, 'C': 7, 'D': 6, 'P': 5, 'F': 0 };
 
@@ -29,6 +52,12 @@ export const TranscriptModal = ({ isOpen, onClose, reportCard, studentProfile, u
           <span className="font-bold text-xs uppercase tracking-wider text-slate-600">Official Semester Grade Sheet</span>
           <div className="flex items-center gap-2">
             <button
+              onClick={handleDownloadPDF}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" /> Download PDF
+            </button>
+            <button
               onClick={handlePrint}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
             >
@@ -47,7 +76,7 @@ export const TranscriptModal = ({ isOpen, onClose, reportCard, studentProfile, u
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-700 text-white shadow-md mb-2">
               <GraduationCap className="w-8 h-8" />
             </div>
-            <h1 className="font-extrabold text-xl text-slate-900 tracking-tight uppercase">Apex Institute of Technology</h1>
+            <h1 className="font-extrabold text-xl text-slate-900 tracking-tight uppercase">College ERP System</h1>
             <p className="text-xs text-slate-600 font-semibold mt-0.5">Autonomous Institution • Approved by AICTE & UGC</p>
             <p className="text-[11px] text-indigo-700 font-bold uppercase tracking-widest mt-2 bg-indigo-50 inline-block px-4 py-1 rounded-full border border-indigo-200">
               Grade Sheet & Academic Transcript

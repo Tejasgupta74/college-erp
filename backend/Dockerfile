@@ -19,8 +19,8 @@ USER node
 COPY --chown=node:node --from=builder /usr/src/app ./
 
 ENV NODE_ENV=production
-ENV PORT=5000
+ENV PORT=8000
 
-EXPOSE 5000
+EXPOSE 8000
 
 CMD ["node", "server.js"]

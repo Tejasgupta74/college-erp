@@ -5,23 +5,33 @@ import { Bell, Clock, ArrowUpRight, Megaphone } from 'lucide-react';
 
 export const NotificationDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [notices, setNotices] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
-    const fetchNotices = async () => {
+    const fetchNotifications = async () => {
       try {
-        const res = await api.get('/notices');
-        const list = res.data.data || [];
-        setNotices(list.slice(0, 5));
-        setUnreadCount(list.length);
+        const res = await api.get('/notifications');
+        setNotifications((res.data.data || []).slice(0, 5));
+        setUnreadCount(res.data.unreadCount || 0);
       } catch (err) {
         console.error('Failed to fetch notifications', err);
       }
     };
-    fetchNotices();
-  }, []);
+    fetchNotifications();
+  }, [isOpen]);
+
+  const markRead = async (notification) => {
+    if (notification.isRead) return;
+    try {
+      await api.put(`/notifications/${notification._id}/read`);
+      setNotifications((current) => current.map((item) => item._id === notification._id ? { ...item, isRead: true } : item));
+      setUnreadCount((count) => Math.max(0, count - 1));
+    } catch (err) {
+      console.error('Failed to mark notification as read', err);
+    }
+  };
 
   // Close when clicking outside
   useEffect(() => {
@@ -37,7 +47,6 @@ export const NotificationDropdown = () => {
       <button
         onClick={() => {
           setIsOpen(!isOpen);
-          if (!isOpen) setUnreadCount(0);
         }}
         className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors relative"
         title="Notifications"
@@ -67,20 +76,14 @@ export const NotificationDropdown = () => {
 
           {/* List */}
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-            {notices.length > 0 ? (
-              notices.map((n) => (
-                <div key={n._id} className="p-3.5 hover:bg-slate-50/80 transition-colors">
+            {notifications.length > 0 ? (
+              notifications.map((n) => (
+                <Link key={n._id} to={n.link || '/notices'} onClick={() => markRead(n)} className={`block p-3.5 hover:bg-slate-50/80 transition-colors ${n.isRead ? '' : 'bg-indigo-50/40'}`}>
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span
-                      className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                        n.priority === 'Urgent'
-                          ? 'bg-rose-100 text-rose-700'
-                          : n.priority === 'Important'
-                          ? 'bg-amber-100 text-amber-700'
-                          : 'bg-indigo-50 text-indigo-700'
-                      }`}
+                      className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-indigo-50 text-indigo-700"
                     >
-                      {n.priority}
+                      {n.category}
                     </span>
                     <span className="text-[10px] text-slate-400 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
@@ -88,11 +91,11 @@ export const NotificationDropdown = () => {
                     </span>
                   </div>
                   <h4 className="font-bold text-xs text-slate-900 line-clamp-1">{n.title}</h4>
-                  <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">{n.content}</p>
-                </div>
+                  <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">{n.message}</p>
+                </Link>
               ))
             ) : (
-              <div className="p-6 text-center text-xs text-slate-400">No new announcements.</div>
+              <div className="p-6 text-center text-xs text-slate-400">No notifications.</div>
             )}
           </div>
 

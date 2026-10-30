@@ -14,5 +14,7 @@ const facultyProfileSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+facultyProfileSchema.index({ department: 1 });
+
 const FacultyProfile = mongoose.model('FacultyProfile', facultyProfileSchema);
 export default FacultyProfile;

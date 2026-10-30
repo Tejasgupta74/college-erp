@@ -9,7 +9,7 @@ import { protect, authorize } from '../middlewares/auth.js';
 const router = express.Router();
 router.use(protect);
 
-router.route('/').get(getAttendance).post(authorize('admin', 'faculty'), markAttendance);
+router.route('/').get(authorize('admin', 'faculty'), getAttendance).post(authorize('admin', 'faculty'), markAttendance);
 router.get('/student/:studentId', getStudentAttendanceSummary);
 
 export default router;

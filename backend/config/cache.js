@@ -58,7 +58,7 @@ export const cache = new CacheEngine();
 
 export const cacheMiddleware = (ttlSeconds = 180) => (req, res, next) => {
   if (req.method !== 'GET') return next();
-  const cacheKey = `erp:${req.baseUrl}${req.path}:${JSON.stringify(req.query)}:${req.user?.role || 'anon'}`;
+  const cacheKey = `erp:${req.baseUrl}${req.path}:${JSON.stringify(req.query)}:${req.user?._id?.toString() || req.user?.role || 'anon'}`;
   const cachedData = cache.get(cacheKey);
 
   if (cachedData) {

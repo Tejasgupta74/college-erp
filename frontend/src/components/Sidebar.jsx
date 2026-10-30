@@ -72,7 +72,7 @@ export const Sidebar = ({ isOpen, onClose }) => {
               <GraduationCap className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="font-bold text-base text-slate-900 tracking-tight leading-none">Apex Institute</h1>
+              <h1 className="font-bold text-base text-slate-900 tracking-tight leading-none">College ERP</h1>
               <span className="text-[11px] text-slate-500 font-medium">ERP Management</span>
             </div>
           </div>

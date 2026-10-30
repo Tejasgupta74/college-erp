@@ -26,28 +26,31 @@ export const Faculty = () => {
   const [formData, setFormData] = useState(initialFacultyForm);
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
 
-  const fetchFaculty = async () => {
+  const fetchFaculty = async (signal) => {
+    setLoading(true);
     try {
-      let url = '/faculty?';
-      if (search) url += `search=${search}&`;
-      if (selectedDept) url += `department=${selectedDept}&`;
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (selectedDept) params.set('department', selectedDept);
 
       const [res, deptRes] = await Promise.all([
-        api.get(url),
-        api.get('/academics/departments'),
+        api.get(`/faculty?${params.toString()}`, { signal }),
+        api.get('/academics/departments', { signal }),
       ]);
 
       setFacultyList(res.data.data || []);
       setDepartments(deptRes.data.data || []);
     } catch (err) {
-      console.error(err);
+      if (err.code !== 'ERR_CANCELED') console.error(err);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchFaculty();
+    const controller = new AbortController();
+    fetchFaculty(controller.signal);
+    return () => controller.abort();
   }, [search, selectedDept]);
 
   useEffect(() => {
@@ -207,7 +210,7 @@ export const Faculty = () => {
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
                   <input
                     type="password"
-                    placeholder="Leave blank for Faculty@123"
+                    placeholder="Leave blank for College@123"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"

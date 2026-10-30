@@ -5,10 +5,33 @@ import { recordAudit } from '../utils/audit.js';
 
 export const getNotices = async (req, res) => {
   try {
-    const { audience } = req.query;
-    const query = audience && audience !== 'all' ? { targetAudience: { $in: ['all', audience] } } : {};
-    const notices = await Notice.find(query).populate('author', 'name role').sort({ isPinned: -1, createdAt: -1 });
-    res.json({ success: true, count: notices.length, data: notices });
+    const { page = 1, limit = 20 } = req.query;
+    const roleAudience = req.user.role === 'student' ? ['student', 'students'] : [req.user.role];
+    const query = req.user.role === 'admin'
+      ? {}
+      : { targetAudience: { $in: ['all', ...roleAudience] } };
+
+    const pageNum = Math.max(1, parseInt(page, 10));
+    const limitNum = Math.max(1, parseInt(limit, 10));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [notices, totalCount] = await Promise.all([
+      Notice.find(query)
+        .populate('author', 'name role')
+        .sort({ isPinned: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum),
+      Notice.countDocuments(query),
+    ]);
+
+    res.json({
+      success: true,
+      count: notices.length,
+      total: totalCount,
+      page: pageNum,
+      pages: Math.ceil(totalCount / limitNum),
+      data: notices,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

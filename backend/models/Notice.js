@@ -12,5 +12,8 @@ const noticeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+noticeSchema.index({ isPinned: -1, createdAt: -1 });
+noticeSchema.index({ targetAudience: 1 });
+
 const Notice = mongoose.model('Notice', noticeSchema);
 export default Notice;

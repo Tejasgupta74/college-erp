@@ -2,13 +2,13 @@ name: College ERP CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, master ]
   pull_request:
-    branches: [main, develop]
+    branches: [ main, master ]
 
 jobs:
   backend-test:
-    name: Backend Lint & Integration Tests
+    name: Backend Test Suite
     runs-on: ubuntu-latest
 
     services:
@@ -18,58 +18,48 @@ jobs:
           - 27017:27017
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 22.x
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22.x
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
 
       - name: Install Backend Dependencies
-        working-directory: ./backend
+        working-directory: backend
         run: npm ci
 
-      - name: Seed Test Database
-        working-directory: ./backend
-        run: npm run seed
+      - name: Run Backend Integration & Production Tests
+        working-directory: backend
         env:
-          MONGODB_URI: mongodb://localhost:27017/college_erp
-          JWT_SECRET: ci_test_secret_key_2026
-
-      - name: Run Backend Server in Background
-        working-directory: ./backend
-        run: node server.js &
-        env:
-          PORT: 5000
-          MONGODB_URI: mongodb://localhost:27017/college_erp
-          JWT_SECRET: ci_test_secret_key_2026
-
-      - name: Execute Automated Integration Test Suite
-        working-directory: ./backend
-        run: npm test
+          PORT: 8000
+          MONGODB_URI: mongodb://localhost:27017/college_erp_test
+          JWT_SECRET: testing_jwt_super_secret_key_minimum_32_characters_2026
+          NODE_ENV: test
+        run: node tests/api.test.js
 
   frontend-build:
-    name: Frontend Lint & Code-Split Production Build
+    name: Frontend Build & Lint
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 22.x
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22.x
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install Frontend Dependencies
-        working-directory: ./frontend
+        working-directory: frontend
         run: npm ci
 
-      - name: Verify Production Build & Asset Hashing
-        working-directory: ./frontend
+      - name: Build Frontend Application
+        working-directory: frontend
         run: npm run build
