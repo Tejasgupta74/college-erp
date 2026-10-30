@@ -159,4 +159,49 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     assert.ok(data.total >= 0);
     assert.ok(Array.isArray(data.data));
   });
+
+  test('10. Public Departments Endpoint for Registration', async () => {
+    const res = await fetch(`${BASE_URL}/auth/departments`);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.ok(Array.isArray(data.departments));
+  });
+
+  test('11. Student Self-Registration (Sign Up Flow)', async () => {
+    const testEmail = `newstudent_${Date.now()}@college.edu`;
+    const res = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Automated Test Student',
+        email: testEmail,
+        password: 'Password@123',
+        phone: '9876543210',
+        semester: 1,
+      }),
+    });
+    assert.equal(res.status, 201);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.ok(data.token, 'Should return authentication token');
+    assert.equal(data.user.role, 'student');
+    assert.ok(data.user.profile.rollNo, 'Should have student profile rollNo');
+  });
+
+  test('12. Direct Password Reset (No Tokens Generated/Required)', async () => {
+    // Reset password directly using email and new password
+    const res = await fetch(`${BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'student@college.edu',
+        newPassword: 'Student@123',
+      }),
+    });
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.match(data.message, /Password reset successfully/i);
+  });
 });

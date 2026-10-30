@@ -53,6 +53,19 @@ export const AuthProvider = ({ children }) => {
     throw new Error(res.data.message || 'Login failed');
   };
 
+  const register = async (userData) => {
+    const res = await api.post('/auth/register', userData);
+    if (res.data.success) {
+      const { token: authToken, user: authUser } = res.data;
+      setToken(authToken);
+      setUser(authUser);
+      localStorage.setItem('erp_token', authToken);
+      localStorage.setItem('erp_user', JSON.stringify(authUser));
+      return authUser;
+    }
+    throw new Error(res.data.message || 'Registration failed');
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -61,6 +74,7 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated: !!token && !!user,
         loading,
         login,
+        register,
         logout,
       }}
     >

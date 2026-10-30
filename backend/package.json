@@ -23,7 +23,6 @@
     "mongoose": "^8.9.5",
     "morgan": "^1.10.0",
     "multer": "^2.5.0",
-    "resend": "^6.35.0",
     "winston": "^3.19.0"
   },
   "devDependencies": {
