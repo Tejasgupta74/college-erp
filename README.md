@@ -45,7 +45,6 @@ college-erp/
 │   │   └── storage.js             # Multer upload limits and file filters
 │   ├── controllers/               # Business logic controllers
 │   ├── middlewares/
-│   │   ├── asyncHandler.js        # Async wrapper for unhandled rejections
 │   │   ├── auth.js                # JWT & HttpOnly cookie verification, RBAC
 │   │   ├── errorHandler.js        # Centralized JSON error formatting
 │   │   ├── rateLimiter.js         # API and brute-force auth rate limiters
@@ -53,7 +52,7 @@ college-erp/
 │   ├── models/                    # Mongoose schemas with compound indexes
 │   ├── routes/                    # Protected REST endpoint routing
 │   ├── tests/
-│   │   └── api.test.js            # Node test suite (9 integration suites)
+│   │   └── api.test.js            # Node test runner suite (12 integration test suites)
 │   ├── utils/                     # Token generators and audit log helpers
 │   ├── Dockerfile                 # Multi-stage production container
 │   ├── seeder.js                  # Dev-only database seeder (blocked in prod)

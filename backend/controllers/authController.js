@@ -4,6 +4,7 @@ import StudentProfile from '../models/StudentProfile.js';
 import FacultyProfile from '../models/FacultyProfile.js';
 import Department from '../models/Department.js';
 import { generateToken } from '../utils/generateToken.js';
+import { recordAudit } from '../utils/audit.js';
 
 const getProfileForUser = (user) => {
   if (user.role === 'student') return StudentProfile.findOne({ user: user._id }).populate('department', 'name code');
@@ -45,6 +46,15 @@ export const login = async (req, res) => {
       secure: isProd,
       sameSite: isProd ? 'strict' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
+    recordAudit({
+      user,
+      action: 'LOGIN_SUCCESS',
+      resource: 'User',
+      resourceId: user._id,
+      ip: req.ip,
+      details: { email: user.email, role: user.role },
     });
 
     res.json({ success: true, token, user: formatUserResponse(user, profile) });
@@ -109,6 +119,15 @@ export const createUser = async (req, res) => {
       throw profileErr;
     }
 
+    recordAudit({
+      user: req.user,
+      action: 'ADMIN_CREATE_USER',
+      resource: 'User',
+      resourceId: user._id,
+      ip: req.ip,
+      details: { email: user.email, role: user.role },
+    });
+
     res.status(201).json({
       success: true,
       message: `${role.toUpperCase()} user created successfully`,
@@ -137,6 +156,15 @@ export const changePassword = async (req, res) => {
 
     user.password = newPassword;
     await user.save();
+
+    recordAudit({
+      user: req.user,
+      action: 'CHANGE_PASSWORD',
+      resource: 'User',
+      resourceId: user._id,
+      ip: req.ip,
+    });
+
     res.json({ success: true, message: 'Password updated successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -241,6 +269,15 @@ export const register = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    recordAudit({
+      user,
+      action: 'SELF_REGISTER_USER',
+      resource: 'User',
+      resourceId: user._id,
+      ip: req.ip,
+      details: { email: user.email, role: user.role },
+    });
+
     res.status(201).json({
       success: true,
       message: 'Registration successful! Welcome to College ERP System.',
@@ -288,6 +325,15 @@ export const resetPassword = async (req, res) => {
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
     await user.save();
+
+    recordAudit({
+      user,
+      action: 'DIRECT_RESET_PASSWORD',
+      resource: 'User',
+      resourceId: user._id,
+      ip: req.ip,
+      details: { email: user.email },
+    });
 
     res.json({
       success: true,

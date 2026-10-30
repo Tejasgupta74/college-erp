@@ -1,6 +1,7 @@
 import Attendance from '../models/Attendance.js';
 import Course from '../models/Course.js';
 import StudentProfile from '../models/StudentProfile.js';
+import { recordAudit } from '../utils/audit.js';
 
 // Helper for date range normalization without mutation
 const getDayRange = (date) => {
@@ -64,6 +65,15 @@ export const markAttendance = async (req, res) => {
       });
     }
 
+    recordAudit({
+      user: req.user,
+      action: 'MARK_ATTENDANCE',
+      resource: 'Attendance',
+      resourceId: attendance._id,
+      ip: req.ip,
+      details: { courseId, section, totalStudents: records.length },
+    });
+
     const populated = await Attendance.findById(attendance._id)
       .populate('course', 'name code')
       .populate('records.student', 'name email');
@@ -111,7 +121,8 @@ export const getAttendance = async (req, res) => {
 // @access  Private
 export const getStudentAttendanceSummary = async (req, res) => {
   try {
-    const studentUserId = (req.params.studentId || req.user._id).toString();
+    const paramId = req.params.studentId;
+    const studentUserId = (!paramId || paramId === 'me') ? req.user._id.toString() : paramId.toString();
     if (req.user.role === 'student' && studentUserId !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'You can only view your own attendance' });
     }

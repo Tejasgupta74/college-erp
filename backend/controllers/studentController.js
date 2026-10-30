@@ -1,9 +1,11 @@
+import mongoose from 'mongoose';
 import StudentProfile from '../models/StudentProfile.js';
 import User from '../models/User.js';
 import Attendance from '../models/Attendance.js';
 import Fee from '../models/Fee.js';
 import Exam from '../models/Exam.js';
 import Course from '../models/Course.js';
+import { recordAudit } from '../utils/audit.js';
 
 export const getStudents = async (req, res) => {
   try {
@@ -57,7 +59,15 @@ export const getStudents = async (req, res) => {
 
 export const getStudentById = async (req, res) => {
   try {
-    const profile = await StudentProfile.findOne({ $or: [{ _id: req.params.id }, { user: req.params.id }] })
+    const paramId = req.params.id;
+    const targetUserId = (!paramId || paramId === 'me') ? req.user._id : paramId;
+    const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
+
+    const query = isObjectId
+      ? { $or: [{ _id: targetUserId }, { user: targetUserId }] }
+      : { enrollmentNo: String(targetUserId).toUpperCase() };
+
+    const profile = await StudentProfile.findOne(query)
       .populate('user', 'name email phone avatar isActive')
       .populate('department', 'name code');
 

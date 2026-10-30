@@ -87,8 +87,8 @@ export const getDashboardStats = async (req, res) => {
         StudentProfile.findOne({ user: userId }).populate('department', 'name code'),
         Fee.find({ student: userId }),
         Notice.find({ targetAudience: { $in: ['all', 'student', 'students'] } }).sort({ createdAt: -1 }).limit(5),
-        Attendance.find({ 'records.student': userId.toString() }).populate('course', 'name code'),
-        Exam.find({ 'results.student': userId.toString() }).populate('course', 'name code'),
+        Attendance.find({ 'records.student': userId }).populate('course', 'name code'),
+        Exam.find({ 'results.student': userId }).populate('course', 'name code'),
       ]);
 
       const totalFeeDue = fees.reduce((sum, f) => sum + f.totalAmount, 0);

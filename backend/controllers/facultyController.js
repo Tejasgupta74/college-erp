@@ -1,6 +1,8 @@
+import mongoose from 'mongoose';
 import FacultyProfile from '../models/FacultyProfile.js';
 import User from '../models/User.js';
 import Course from '../models/Course.js';
+import { recordAudit } from '../utils/audit.js';
 
 export const getFaculty = async (req, res) => {
   try {
@@ -42,7 +44,15 @@ export const getFaculty = async (req, res) => {
 
 export const getFacultyById = async (req, res) => {
   try {
-    const profile = await FacultyProfile.findOne({ $or: [{ _id: req.params.id }, { user: req.params.id }] })
+    const paramId = req.params.id;
+    const targetUserId = (!paramId || paramId === 'me') ? req.user._id : paramId;
+    const isObjectId = mongoose.Types.ObjectId.isValid(targetUserId);
+
+    const query = isObjectId
+      ? { $or: [{ _id: targetUserId }, { user: targetUserId }] }
+      : { employeeId: String(targetUserId).toUpperCase() };
+
+    const profile = await FacultyProfile.findOne(query)
       .populate('user', 'name email phone avatar isActive')
       .populate('department', 'name code');
 
