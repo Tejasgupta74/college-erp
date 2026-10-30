@@ -4,7 +4,6 @@ services:
     name: college-erp-backend
     runtime: node
     plan: free
-    region: oregon
     rootDir: backend
     buildCommand: npm install
     startCommand: node server.js
@@ -22,11 +21,10 @@ services:
         value: '*'
 
   # 2. College ERP Frontend SPA (Static Site)
+  # Note: Static sites are served via Render's global CDN and cannot have a region field
   - type: web
     name: college-erp-frontend
     runtime: static
-    plan: free
-    region: oregon
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
