@@ -3,12 +3,19 @@ import FacultyProfile from '../models/FacultyProfile.js';
 import User from '../models/User.js';
 import Course from '../models/Course.js';
 import { recordAudit } from '../utils/audit.js';
+import { parsePaginationParams } from '../utils/pagination.js';
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const getFaculty = async (req, res) => {
   try {
-    const { department, search, page = 1, limit = 20 } = req.query;
+    const { department, search } = req.query;
+
+    const pagination = parsePaginationParams(req.query, 20, 100);
+    if (pagination.error) {
+      return res.status(400).json({ success: false, message: pagination.error });
+    }
+    const { pageNum, limitNum, skip } = pagination;
 
     if (department && !mongoose.Types.ObjectId.isValid(department)) {
       return res.status(400).json({ success: false, message: 'Invalid department ID format' });
@@ -34,10 +41,6 @@ export const getFaculty = async (req, res) => {
         { user: { $in: userIds } },
       ];
     }
-
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
-    const skip = (pageNum - 1) * limitNum;
 
     const [profiles, totalCount] = await Promise.all([
       FacultyProfile.find(query)
@@ -117,6 +120,15 @@ export const updateFaculty = async (req, res) => {
       .populate('user', 'name email phone avatar')
       .populate('department', 'name code');
 
+    recordAudit({
+      user: req.user,
+      action: 'UPDATE_FACULTY',
+      resource: 'FacultyProfile',
+      resourceId: profile._id,
+      ip: req.ip,
+      details: { employeeId: profile.employeeId, designation: profile.designation },
+    });
+
     res.json({ success: true, data: updated });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
@@ -133,6 +145,16 @@ export const deleteFaculty = async (req, res) => {
       FacultyProfile.findByIdAndDelete(req.params.id),
       profile.user ? Course.updateMany({ faculty: profile.user }, { faculty: null }) : Promise.resolve(),
     ]);
+
+    recordAudit({
+      user: req.user,
+      action: 'DELETE_FACULTY',
+      resource: 'FacultyProfile',
+      resourceId: profile._id,
+      ip: req.ip,
+      details: { employeeId: profile.employeeId, userId: profile.user },
+    });
+
     res.json({ success: true, message: 'Faculty member deleted successfully' });
   } catch (error) {
     res.status(500).json({

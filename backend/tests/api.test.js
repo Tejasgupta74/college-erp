@@ -527,6 +527,118 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     assert.equal(accountantRosterRes.status, 403, 'Accountants must not be authorized on /roster');
   });
 
+  test('16. Course Instructor RBAC: Reject Student/Non-Faculty as Instructor on Create & Update', async () => {
+    // 1. Fetch departments to get a valid deptId
+    const deptsRes = await fetch(`${BASE_URL}/academics/departments`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const deptsData = await deptsRes.json();
+    const deptId = deptsData.data[0]._id;
+
+    // 2. Fetch student user ID
+    const studentsRes = await fetch(`${BASE_URL}/students?limit=1`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const studentsData = await studentsRes.json();
+    const studentUserId = studentsData.data[0].user._id || studentsData.data[0].user;
+
+    // 3. Attempt to create course with a student assigned as faculty instructor
+    const createWithStudentRes = await fetch(`${BASE_URL}/academics/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        name: 'Invalid Instructor Course',
+        code: `INV${Date.now().toString().slice(-4)}`,
+        credits: 3,
+        department: deptId,
+        semester: 1,
+        faculty: studentUserId,
+      }),
+    });
+    assert.equal(createWithStudentRes.status, 400, 'Assigning a student as course instructor must return 400');
+    const createData = await createWithStudentRes.json();
+    assert.match(createData.message, /faculty role/i);
+
+    // 4. Attempt to update an existing course with a student assigned as faculty instructor
+    const coursesRes = await fetch(`${BASE_URL}/academics/courses`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const coursesData = await coursesRes.json();
+    const courseId = coursesData.data[0]._id;
+
+    const updateWithStudentRes = await fetch(`${BASE_URL}/academics/courses/${courseId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        faculty: studentUserId,
+      }),
+    });
+    assert.equal(updateWithStudentRes.status, 400, 'Updating a course with a student as instructor must return 400');
+    const updateData = await updateWithStudentRes.json();
+    assert.match(updateData.message, /faculty role/i);
+  });
+
+  test('17. Strict Pagination Validation (limit=1.5, limit=abc, limit=0, page=0 return 400)', async () => {
+    // 1. limit=1.5 must return 400
+    const limitFloatRes = await fetch(`${BASE_URL}/students?limit=1.5`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(limitFloatRes.status, 400, 'limit=1.5 must return 400');
+
+    // 2. limit=abc must return 400
+    const limitAlphaRes = await fetch(`${BASE_URL}/students?limit=abc`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(limitAlphaRes.status, 400, 'limit=abc must return 400');
+
+    // 3. limit=0 must return 400
+    const limitZeroRes = await fetch(`${BASE_URL}/students?limit=0`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(limitZeroRes.status, 400, 'limit=0 must return 400');
+
+    // 4. page=0 must return 400
+    const pageZeroRes = await fetch(`${BASE_URL}/students?page=0`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(pageZeroRes.status, 400, 'page=0 must return 400');
+  });
+
+  test('18. File Upload Real Magic Byte Verification & 11 MB JSON Body 413 Rejection', async () => {
+    // 1. Upload file with HTML content named fake.png -> must be rejected with 400
+    const boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW';
+    const fakeFileContent = '<html><body><h1>Not an image</h1></body></html>';
+    const multipartBody = [
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="file"; filename="fake.png"',
+      'Content-Type: image/png',
+      '',
+      fakeFileContent,
+      `--${boundary}--`,
+    ].join('\r\n');
+
+    const fakeUploadRes = await fetch(`${BASE_URL}/upload/file`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        Authorization: `Bearer ${adminToken}`,
+      },
+      body: multipartBody,
+    });
+    assert.equal(fakeUploadRes.status, 400, 'Uploading HTML disguised as PNG must be rejected with 400');
+    const fakeUploadData = await fakeUploadRes.json();
+    assert.match(fakeUploadData.message, /Invalid file signature/i);
+
+    // 2. 11 MB JSON body must return 413 Payload Too Large
+    const elevenMbString = 'A'.repeat(11 * 1024 * 1024);
+    const hugeBodyRes = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@college.edu', password: 'Admin@123', payload: elevenMbString }),
+    });
+    assert.equal(hugeBodyRes.status, 413, '11 MB JSON body must return 413 Payload Too Large');
+  });
+
   after(async () => {
     if (spawnedServer) {
       console.log('[Test Teardown] Stopping test backend server process...');

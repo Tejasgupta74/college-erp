@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Search, Mail, CheckCircle, AlertCircle, Eye, Download, FileSpreadsheet } from 'lucide-react';
@@ -45,7 +45,7 @@ export const Students = () => {
     return () => clearTimeout(handler);
   }, [search]);
 
-  const fetchStudents = async (signal) => {
+  const fetchStudents = useCallback(async (signal) => {
     setLoading(true);
     setFetchError(null);
     try {
@@ -74,7 +74,7 @@ export const Students = () => {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, [page, debouncedSearch, selectedDept, selectedSem]);
 
   useEffect(() => {
     setPage(1);
@@ -84,7 +84,7 @@ export const Students = () => {
     const controller = new AbortController();
     fetchStudents(controller.signal);
     return () => controller.abort();
-  }, [page, debouncedSearch, selectedDept, selectedSem]);
+  }, [fetchStudents]);
 
   useEffect(() => {
     if (!statusMsg.text) return;

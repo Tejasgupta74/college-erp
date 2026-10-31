@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import Exam from '../models/Exam.js';
 import Course from '../models/Course.js';
 import StudentProfile from '../models/StudentProfile.js';
+import { recordAudit } from '../utils/audit.js';
+import { parsePaginationParams } from '../utils/pagination.js';
 
 // Grade calculation helper with division-by-zero protection
 const calculateGrade = (marksObtained, maxMarks, passingMarks) => {
@@ -18,7 +20,14 @@ const calculateGrade = (marksObtained, maxMarks, passingMarks) => {
 
 export const getExams = async (req, res) => {
   try {
-    const { courseId, departmentId, semester, page = 1, limit = 20 } = req.query;
+    const { courseId, departmentId, semester } = req.query;
+
+    const pagination = parsePaginationParams(req.query, 20, 100);
+    if (pagination.error) {
+      return res.status(400).json({ success: false, message: pagination.error });
+    }
+    const { pageNum, limitNum, skip } = pagination;
+
     const query = {};
     if (courseId) {
       if (!mongoose.Types.ObjectId.isValid(courseId)) {
@@ -43,10 +52,6 @@ export const getExams = async (req, res) => {
       const assignedCourseIds = await Course.find({ faculty: req.user._id }).distinct('_id');
       query.course = { ...(courseId ? { $eq: courseId } : {}), $in: assignedCourseIds };
     }
-
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
-    const skip = (pageNum - 1) * limitNum;
 
     const [exams, totalCount] = await Promise.all([
       Exam.find(query)
@@ -103,6 +108,15 @@ export const createExam = async (req, res) => {
     const populated = await Exam.findById(exam._id)
       .populate('course', 'name code credits')
       .populate('department', 'name code');
+
+    recordAudit({
+      user: req.user,
+      action: 'CREATE_EXAM',
+      resource: 'Exam',
+      resourceId: exam._id,
+      ip: req.ip,
+      details: { title: exam.title, course: course.name, examType: exam.examType, maxMarks: exam.maxMarks },
+    });
 
     res.status(201).json({ success: true, data: populated });
   } catch (error) {
@@ -180,6 +194,19 @@ export const recordMarks = async (req, res) => {
       .populate('course', 'name code credits')
       .populate('department', 'name code')
       .populate('results.student', 'name email');
+
+    recordAudit({
+      user: req.user,
+      action: 'RECORD_EXAM_MARKS',
+      resource: 'Exam',
+      resourceId: exam._id,
+      ip: req.ip,
+      details: {
+        title: exam.title,
+        studentsCount: updatedResults.length,
+        resultsSummary: updatedResults.map((r) => ({ studentId: r.student, marksObtained: r.marksObtained, grade: r.grade })),
+      },
+    });
 
     res.json({ success: true, message: 'Marks recorded successfully', data: updated });
   } catch (error) {

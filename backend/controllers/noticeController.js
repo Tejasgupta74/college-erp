@@ -2,18 +2,20 @@ import Notice from '../models/Notice.js';
 import { invalidateCache } from '../config/cache.js';
 import { broadcastNotification } from '../services/notificationService.js';
 import { recordAudit } from '../utils/audit.js';
+import { parsePaginationParams } from '../utils/pagination.js';
 
 export const getNotices = async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
+    const pagination = parsePaginationParams(req.query, 20, 100);
+    if (pagination.error) {
+      return res.status(400).json({ success: false, message: pagination.error });
+    }
+    const { pageNum, limitNum, skip } = pagination;
+
     const roleAudience = req.user.role === 'student' ? ['student', 'students'] : [req.user.role];
     const query = req.user.role === 'admin'
       ? {}
       : { targetAudience: { $in: ['all', ...roleAudience] } };
-
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
-    const skip = (pageNum - 1) * limitNum;
 
     const [notices, totalCount] = await Promise.all([
       Notice.find(query)

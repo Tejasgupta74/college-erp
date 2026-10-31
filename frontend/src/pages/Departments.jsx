@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { Plus, AlertCircle, CheckCircle } from 'lucide-react';
@@ -12,7 +12,7 @@ export const Departments = () => {
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [fetchError, setFetchError] = useState(null);
 
-  const fetchDepartments = async (signal) => {
+  const fetchDepartments = useCallback(async (signal) => {
     setLoading(true);
     setFetchError(null);
     try {
@@ -26,13 +26,13 @@ export const Departments = () => {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     fetchDepartments(controller.signal);
     return () => controller.abort();
-  }, []);
+  }, [fetchDepartments]);
 
   useEffect(() => {
     if (!statusMsg.text) return;

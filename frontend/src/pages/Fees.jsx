@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Filter, CheckCircle2, AlertCircle, CheckCircle, Receipt } from 'lucide-react';
@@ -20,7 +20,6 @@ export const Fees = () => {
   const isAccountant = user?.role === 'accountant' || user?.role === 'admin';
 
   const [fees, setFees] = useState([]);
-  const [departments, setDepartments] = useState([]);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
@@ -41,7 +40,7 @@ export const Fees = () => {
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [fetchError, setFetchError] = useState(null);
 
-  const fetchFees = async (signal) => {
+  const fetchFees = useCallback(async (signal) => {
     setLoading(true);
     setFetchError(null);
     try {
@@ -49,9 +48,8 @@ export const Fees = () => {
       if (isStudent && user?._id) url += `studentId=${user._id}&`;
       if (statusFilter) url += `status=${statusFilter}&`;
 
-      const [feeRes, deptRes, stRes] = await Promise.all([
+      const [feeRes, stRes] = await Promise.all([
         api.get(url, { signal }),
-        api.get('/academics/departments', { signal }),
         isAccountant ? api.get('/students?limit=100', { signal }) : Promise.resolve({ data: { data: [] } }),
       ]);
 
@@ -61,7 +59,6 @@ export const Fees = () => {
         pages: feeRes.data.pages || 1,
         total: feeRes.data.total || (feeRes.data.data || []).length,
       });
-      setDepartments(deptRes.data.data || []);
       setStudents(stRes.data.data || []);
     } catch (err) {
       if (err.code !== 'ERR_CANCELED') {
@@ -71,7 +68,7 @@ export const Fees = () => {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, [page, isStudent, user?._id, statusFilter, isAccountant]);
 
   useEffect(() => {
     setPage(1);
@@ -81,7 +78,7 @@ export const Fees = () => {
     const controller = new AbortController();
     fetchFees(controller.signal);
     return () => controller.abort();
-  }, [page, statusFilter, user]);
+  }, [fetchFees]);
 
   useEffect(() => {
     if (!statusMsg.text) return;

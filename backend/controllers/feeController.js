@@ -4,6 +4,7 @@ import Fee from '../models/Fee.js';
 import User from '../models/User.js';
 import logger from '../config/logger.js';
 import { recordAudit } from '../utils/audit.js';
+import { parsePaginationParams } from '../utils/pagination.js';
 
 // @desc    Get all fees / invoices
 // @route   GET /api/fees
@@ -14,7 +15,14 @@ export const getFees = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Faculty are not authorized to access fee records' });
     }
 
-    const { studentId, status, departmentId, page = 1, limit = 20 } = req.query;
+    const { studentId, status, departmentId } = req.query;
+
+    const pagination = parsePaginationParams(req.query, 20, 100);
+    if (pagination.error) {
+      return res.status(400).json({ success: false, message: pagination.error });
+    }
+    const { pageNum, limitNum, skip } = pagination;
+
     const query = {};
 
     // Strict role scoping: Students can ONLY view their own fee invoices
@@ -34,10 +42,6 @@ export const getFees = async (req, res) => {
       }
       query.department = departmentId;
     }
-
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
-    const skip = (pageNum - 1) * limitNum;
 
     const [fees, totalCount] = await Promise.all([
       Fee.find(query)

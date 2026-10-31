@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -35,11 +35,11 @@ export const Attendance = () => {
   // State for student view
   const [studentSummary, setStudentSummary] = useState(null);
 
-  const fetchStudentSummary = async (signal) => {
+  const fetchStudentSummary = useCallback(async (signal) => {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await api.get(`/attendance/student/${user._id}`, { signal });
+      const res = await api.get(`/attendance/student/${user?._id}`, { signal });
       setStudentSummary(res.data.data);
     } catch (err) {
       if (err.code !== 'ERR_CANCELED') {
@@ -49,9 +49,9 @@ export const Attendance = () => {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, [user?._id]);
 
-  const fetchFacultyCourses = async (signal) => {
+  const fetchFacultyCourses = useCallback(async (signal) => {
     setLoading(true);
     setFetchError(null);
     try {
@@ -68,7 +68,7 @@ export const Attendance = () => {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, [user?._id, user?.role]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -78,7 +78,7 @@ export const Attendance = () => {
       fetchFacultyCourses(controller.signal);
     }
     return () => controller.abort();
-  }, [user, isStudent]);
+  }, [isStudent, fetchStudentSummary, fetchFacultyCourses]);
 
   // Auto-clear status message
   useEffect(() => {
@@ -309,7 +309,16 @@ export const Attendance = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {studentSummary?.breakdown?.length > 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan="5" className="py-8 text-center text-slate-400 font-medium">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span>Loading attendance records...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : studentSummary?.breakdown?.length > 0 ? (
                   studentSummary.breakdown.map((item) => (
                     <tr key={item.courseId} className="hover:bg-slate-50/60">
                       <td className="py-4 px-6">

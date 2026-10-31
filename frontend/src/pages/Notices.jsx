@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Pin, Clock, User, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
@@ -24,7 +24,7 @@ export const Notices = () => {
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [fetchError, setFetchError] = useState(null);
 
-  const fetchNotices = async (signal) => {
+  const fetchNotices = useCallback(async (signal) => {
     setLoading(true);
     setFetchError(null);
     try {
@@ -43,13 +43,13 @@ export const Notices = () => {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, [page]);
 
   useEffect(() => {
     const controller = new AbortController();
     fetchNotices(controller.signal);
     return () => controller.abort();
-  }, [page]);
+  }, [fetchNotices]);
 
   useEffect(() => {
     if (!statusMsg.text) return;
@@ -278,6 +278,7 @@ export const Notices = () => {
                     <option value="all">Everyone (All Campus)</option>
                     <option value="students">Students Only</option>
                     <option value="faculty">Faculty & Staff Only</option>
+                    <option value="accountant">Accounts Officers Only</option>
                   </select>
                 </div>
 

@@ -1,7 +1,9 @@
+import mongoose from 'mongoose';
 import Department from '../models/Department.js';
 import Course from '../models/Course.js';
 import StudentProfile from '../models/StudentProfile.js';
 import Attendance from '../models/Attendance.js';
+import User from '../models/User.js';
 import { invalidateCache } from '../config/cache.js';
 import { recordAudit } from '../utils/audit.js';
 
@@ -110,6 +112,20 @@ export const getCourses = async (req, res) => {
 export const createCourse = async (req, res) => {
   try {
     const { name, code, credits, department, semester, type = 'Theory', faculty = null, description = '' } = req.body;
+
+    if (faculty) {
+      if (!mongoose.Types.ObjectId.isValid(faculty)) {
+        return res.status(400).json({ success: false, message: 'Invalid faculty ID format' });
+      }
+      const facultyUser = await User.findById(faculty);
+      if (!facultyUser) {
+        return res.status(404).json({ success: false, message: 'Assigned faculty user not found' });
+      }
+      if (facultyUser.role !== 'faculty') {
+        return res.status(400).json({ success: false, message: 'Course instructor must be a user with the faculty role' });
+      }
+    }
+
     const course = await Course.create({ name, code, credits, department, semester, type, faculty: faculty || null, description });
     invalidateCache('erp:/api/academics*');
     recordAudit({ user: req.user, action: 'CREATE_COURSE', resource: 'Course', resourceId: course._id, ip: req.ip, details: { name, code, credits } });
@@ -123,6 +139,20 @@ export const updateCourse = async (req, res) => {
   try {
     const updateData = { ...req.body };
     if (updateData.faculty === '') updateData.faculty = null;
+
+    if (updateData.faculty) {
+      if (!mongoose.Types.ObjectId.isValid(updateData.faculty)) {
+        return res.status(400).json({ success: false, message: 'Invalid faculty ID format' });
+      }
+      const facultyUser = await User.findById(updateData.faculty);
+      if (!facultyUser) {
+        return res.status(404).json({ success: false, message: 'Assigned faculty user not found' });
+      }
+      if (facultyUser.role !== 'faculty') {
+        return res.status(400).json({ success: false, message: 'Course instructor must be a user with the faculty role' });
+      }
+    }
+
     const course = await Course.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true })
       .populate('department', 'name code')
       .populate('faculty', 'name email');

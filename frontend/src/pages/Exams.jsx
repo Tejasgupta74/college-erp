@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { Award, Plus, Edit, Save, CheckCircle, AlertCircle, Printer } from 'lucide-react';
@@ -27,7 +27,6 @@ export const Exams = () => {
   // Faculty/Admin state
   const [exams, setExams] = useState([]);
   const [courses, setCourses] = useState([]);
-  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
@@ -41,7 +40,7 @@ export const Exams = () => {
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [fetchError, setFetchError] = useState(null);
 
-  const fetchData = async (signal) => {
+  const fetchData = useCallback(async (signal) => {
     setLoading(true);
     setFetchError(null);
     try {
@@ -49,10 +48,9 @@ export const Exams = () => {
         const res = await api.get(`/exams/report-card/${user._id}`, { signal });
         setReportCard(res.data.data || []);
       } else {
-        const [examRes, courseRes, deptRes] = await Promise.all([
+        const [examRes, courseRes] = await Promise.all([
           api.get(`/exams?page=${page}&limit=20`, { signal }),
           api.get('/academics/courses', { signal }),
-          api.get('/academics/departments', { signal }),
         ]);
 
         setExams(examRes.data.data || []);
@@ -62,7 +60,6 @@ export const Exams = () => {
           total: examRes.data.total || (examRes.data.data || []).length,
         });
         setCourses(courseRes.data.data || []);
-        setDepartments(deptRes.data.data || []);
       }
     } catch (err) {
       if (err.code !== 'ERR_CANCELED') {
@@ -72,13 +69,13 @@ export const Exams = () => {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, [isStudent, page, user?._id]);
 
   useEffect(() => {
     const controller = new AbortController();
     fetchData(controller.signal);
     return () => controller.abort();
-  }, [user, page]);
+  }, [fetchData]);
 
   useEffect(() => {
     if (!statusMsg.text) return;

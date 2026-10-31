@@ -7,10 +7,21 @@ export const notFound = (req, res, next) => {
 };
 
 export const errorHandler = (err, req, res, next) => {
-  let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  let statusCode = res.statusCode === 200 ? (err.status || err.statusCode || 500) : res.statusCode;
   let code = err.code || 'INTERNAL_SERVER_ERROR';
   let message = err.message || 'An unexpected server error occurred';
   let details = err.details || null;
+
+  // Handle Payload Too Large (Express body-parser limit exceeded)
+  if (err.type === 'entity.too.large' || err.status === 413 || err.statusCode === 413) {
+    statusCode = 413;
+    code = 'PAYLOAD_TOO_LARGE';
+    message = 'Request entity too large: payload exceeds maximum allowed size (10MB)';
+  } else if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    statusCode = 400;
+    code = 'BAD_REQUEST';
+    message = 'Malformed JSON body';
+  }
 
   // Handle Mongoose Bad Identifier (CastError)
   if (err.name === 'CastError') {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Search, Mail, Phone, CheckCircle, AlertCircle } from 'lucide-react';
@@ -29,7 +29,7 @@ export const Faculty = () => {
   const [statusMsg, setStatusMsg] = useState({ type: '', text: '' });
   const [fetchError, setFetchError] = useState(null);
 
-  const fetchFaculty = async (signal) => {
+  const fetchFaculty = useCallback(async (signal) => {
     setLoading(true);
     setFetchError(null);
     try {
@@ -59,7 +59,7 @@ export const Faculty = () => {
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
-  };
+  }, [page, search, selectedDept]);
 
   useEffect(() => {
     setPage(1);
@@ -69,7 +69,7 @@ export const Faculty = () => {
     const controller = new AbortController();
     fetchFaculty(controller.signal);
     return () => controller.abort();
-  }, [page, search, selectedDept]);
+  }, [fetchFaculty]);
 
   useEffect(() => {
     if (!statusMsg.text) return;

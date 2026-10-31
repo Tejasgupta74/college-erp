@@ -5,13 +5,21 @@ import Attendance from '../models/Attendance.js';
 import Fee from '../models/Fee.js';
 import Exam from '../models/Exam.js';
 import Course from '../models/Course.js';
+import logger from '../config/logger.js';
 import { recordAudit } from '../utils/audit.js';
+import { parsePaginationParams } from '../utils/pagination.js';
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export const getStudents = async (req, res) => {
   try {
-    const { department, semester, section, search, page = 1, limit = 20, all } = req.query;
+    const { department, semester, section, search, all } = req.query;
+
+    const pagination = parsePaginationParams(req.query, 20, 100);
+    if (pagination.error) {
+      return res.status(400).json({ success: false, message: pagination.error });
+    }
+    const { pageNum, limitNum, skip } = pagination;
 
     if (department && !mongoose.Types.ObjectId.isValid(department)) {
       return res.status(400).json({ success: false, message: 'Invalid department ID format' });
@@ -84,10 +92,6 @@ export const getStudents = async (req, res) => {
       });
     }
 
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
-    const skip = (pageNum - 1) * limitNum;
-
     const [profiles, totalCount] = await Promise.all([
       profileQuery
         .populate('user', 'name email phone avatar isActive')
@@ -134,6 +138,12 @@ export const getStudentRoster = async (req, res) => {
       const semNum = Number(semester);
       if (!Number.isInteger(semNum) || semNum < 1 || semNum > 12) {
         return res.status(400).json({ success: false, message: 'Semester must be an integer between 1 and 12' });
+      }
+    }
+    if (limit !== undefined) {
+      const limitStr = String(limit).trim();
+      if (!/^\d+$/.test(limitStr) || parseInt(limitStr, 10) < 1) {
+        return res.status(400).json({ success: false, message: 'Limit parameter must be a positive integer greater than or equal to 1' });
       }
     }
 
@@ -348,6 +358,7 @@ export const deleteStudent = async (req, res) => {
       message: 'Student deactivated and removed from active roster. Financial and fee records preserved for accounting audit.',
     });
   } catch (error) {
+    logger.error('Failed to process student deactivation', { error: error.message, stack: error.stack });
     res.status(500).json({ success: false, message: 'Failed to process student deactivation' });
   }
 };

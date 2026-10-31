@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import StudentProfile from '../models/StudentProfile.js';
 import FacultyProfile from '../models/FacultyProfile.js';
 import Department from '../models/Department.js';
+import logger from '../config/logger.js';
 import { generateToken } from '../utils/generateToken.js';
 import { recordAudit } from '../utils/audit.js';
 
@@ -196,6 +197,7 @@ export const changePassword = async (req, res) => {
       token: newToken,
     });
   } catch (error) {
+    logger.error('Failed to update password', { error: error.message, stack: error.stack });
     res.status(500).json({ success: false, message: 'Failed to update password' });
   }
 };
@@ -244,6 +246,7 @@ export const forgotPassword = async (req, res) => {
       ...(isDev && { resetToken }),
     });
   } catch (error) {
+    logger.error('Failed to process forgot password request', { error: error.message, stack: error.stack });
     res.status(500).json({ success: false, message: 'Failed to process forgot password request' });
   }
 };

@@ -70,7 +70,7 @@ const seedData = async () => {
       phone: '+91 9876543211',
     });
 
-    const accountantUser2 = await User.create({
+    await User.create({
       name: 'Sunita Mehra (Bursar)',
       email: 'sunita.mehra@college.edu',
       password: 'Accountant@123',
@@ -253,7 +253,7 @@ const seedData = async () => {
       description: 'Boolean algebra, logic synthesis, flip-flops, 8086 microprocessor interfacing.',
     });
 
-    const courseRobotics = await Course.create({
+    await Course.create({
       name: 'Robotics & Industrial Automation',
       code: 'ME301',
       credits: 4,
@@ -264,7 +264,7 @@ const seedData = async () => {
       description: 'Manipulator kinematics, dynamics, trajectory planning, and actuator controls.',
     });
 
-    const courseML = await Course.create({
+    await Course.create({
       name: 'Applied Machine Learning',
       code: 'AI201',
       credits: 4,
@@ -275,7 +275,7 @@ const seedData = async () => {
       description: 'Supervised & unsupervised learning, gradient boosting, and transformer models.',
     });
 
-    const courseCloud = await Course.create({
+    await Course.create({
       name: 'Cloud Computing & DevOps',
       code: 'CS301',
       credits: 3,
