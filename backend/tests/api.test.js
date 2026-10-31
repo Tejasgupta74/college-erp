@@ -302,6 +302,231 @@ describe('College ERP Production Architecture & API Test Suite', () => {
     assert.equal(studentFailRes.status, 403, 'Students must not access cohort rosters');
   });
 
+  test('12. Attendance: Future Date Rejection & Non-Destructive Multi-Session Creation', async () => {
+    // Fetch a course to test with
+    const coursesRes = await fetch(`${BASE_URL}/academics/courses`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const coursesData = await coursesRes.json();
+    assert.ok(coursesData.data.length > 0);
+    const course = coursesData.data[0];
+
+    // Fetch enrolled students for this course's dept & semester
+    const rosterRes = await fetch(
+      `${BASE_URL}/students/roster?department=${course.department._id || course.department}&semester=${course.semester}&section=A`,
+      { headers: { Authorization: `Bearer ${adminToken}` } }
+    );
+    const rosterData = await rosterRes.json();
+    assert.ok(rosterData.data.length > 0);
+    const studentUser = rosterData.data[0].user._id || rosterData.data[0].user;
+
+    // 1. Future date attendance (2030) must be rejected with 400
+    const futureDateRes = await fetch(`${BASE_URL}/attendance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        courseId: course._id,
+        departmentId: course.department._id || course.department,
+        semester: course.semester,
+        section: 'A',
+        date: '2030-01-01',
+        topicCovered: 'Future Lecture',
+        records: [{ student: studentUser, status: 'Present' }],
+      }),
+    });
+    assert.equal(futureDateRes.status, 400, 'Future attendance dates must return 400');
+    const futureDateData = await futureDateRes.json();
+    assert.match(futureDateData.message, /future dates/i);
+
+    // 2. Mark session 1: "Lecture 1"
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const session1Res = await fetch(`${BASE_URL}/attendance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        courseId: course._id,
+        departmentId: course.department._id || course.department,
+        semester: course.semester,
+        section: 'A',
+        date: todayStr,
+        topicCovered: 'Lecture 1',
+        records: [{ student: studentUser, status: 'Present' }],
+      }),
+    });
+    assert.ok([200, 201].includes(session1Res.status));
+    const session1Data = await session1Res.json();
+    const id1 = session1Data.data._id;
+
+    // 3. Mark session 2 on same day: "Lecture 2"
+    const session2Res = await fetch(`${BASE_URL}/attendance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        courseId: course._id,
+        departmentId: course.department._id || course.department,
+        semester: course.semester,
+        section: 'A',
+        date: todayStr,
+        topicCovered: 'Lecture 2',
+        records: [{ student: studentUser, status: 'Present' }],
+      }),
+    });
+    assert.ok([200, 201].includes(session2Res.status));
+    const session2Data = await session2Res.json();
+    const id2 = session2Data.data._id;
+
+    // Must be two distinct sessions, session 2 did not overwrite session 1
+    assert.notEqual(id1, id2, 'Second session on the same day must not overwrite the first session');
+  });
+
+  test('13. Fee Invoices: Non-Positive Amount Rejection, Student-Only Billing & Method Validation', async () => {
+    // Fetch departments and admin profile
+    const deptsRes = await fetch(`${BASE_URL}/academics/departments`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const deptsData = await deptsRes.json();
+    const deptId = deptsData.data[0]._id;
+
+    const meRes = await fetch(`${BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const meData = await meRes.json();
+    const adminUserId = meData.user._id;
+
+    // 1. Negative amount must be rejected with 400
+    const negRes = await fetch(`${BASE_URL}/fees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        studentId: adminUserId,
+        departmentId: deptId,
+        totalAmount: -500,
+      }),
+    });
+    assert.equal(negRes.status, 400, 'Negative invoice amount must return 400');
+
+    // 2. Zero amount must be rejected with 400
+    const zeroRes = await fetch(`${BASE_URL}/fees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        studentId: adminUserId,
+        departmentId: deptId,
+        totalAmount: 0,
+      }),
+    });
+    assert.equal(zeroRes.status, 400, 'Zero invoice amount must return 400');
+
+    // 3. Billing to non-student (admin) must be rejected with 400
+    const adminBillRes = await fetch(`${BASE_URL}/fees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        studentId: adminUserId,
+        departmentId: deptId,
+        totalAmount: 5000,
+      }),
+    });
+    assert.equal(adminBillRes.status, 400, 'Billing an invoice to an admin user must return 400');
+    const adminBillData = await adminBillRes.json();
+    assert.match(adminBillData.message, /student accounts/i);
+
+    // 4. Unknown payment method ("Bitcoin") must be rejected with 400
+    const feesRes = await fetch(`${BASE_URL}/fees?limit=1`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const feesData = await feesRes.json();
+    if (feesData.data.length > 0) {
+      const feeId = feesData.data[0]._id;
+      const invalidPayRes = await fetch(`${BASE_URL}/fees/${feeId}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ amount: 100, method: 'Bitcoin' }),
+      });
+      assert.equal(invalidPayRes.status, 400, 'Unknown payment method must return 400');
+      const invalidPayData = await invalidPayRes.json();
+      assert.match(invalidPayData.message, /Invalid payment method/i);
+    }
+  });
+
+  test('14. Exams Module: Reject Blank or Null Marks (No Silent 0/F Assignment)', async () => {
+    const examsRes = await fetch(`${BASE_URL}/exams?limit=1`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const examsData = await examsRes.json();
+    if (examsData.data.length > 0) {
+      const exam = examsData.data[0];
+      const rosterRes = await fetch(
+        `${BASE_URL}/students/roster?department=${exam.department._id || exam.department}&semester=${exam.semester}`,
+        { headers: { Authorization: `Bearer ${adminToken}` } }
+      );
+      const rosterData = await rosterRes.json();
+      if (rosterData.data.length > 0) {
+        const studentId = rosterData.data[0].user._id || rosterData.data[0].user;
+
+        // Submitting null marks must return 400
+        const nullMarksRes = await fetch(`${BASE_URL}/exams/${exam._id}/marks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+          body: JSON.stringify({
+            results: [{ studentId, marksObtained: null }],
+          }),
+        });
+        assert.equal(nullMarksRes.status, 400, 'Null marks must be rejected with 400');
+
+        // Submitting empty string marks must return 400
+        const blankMarksRes = await fetch(`${BASE_URL}/exams/${exam._id}/marks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+          body: JSON.stringify({
+            results: [{ studentId, marksObtained: '' }],
+          }),
+        });
+        assert.equal(blankMarksRes.status, 400, 'Blank marks must be rejected with 400');
+      }
+    }
+  });
+
+  test('15. Bad Input Resilience (Graceful 400s Instead of 500 Internal Server Errors)', async () => {
+    // 1. roster?courseId=zzz -> 400
+    const badCourseRes = await fetch(`${BASE_URL}/students/roster?courseId=zzz`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(badCourseRes.status, 400, 'Invalid courseId should return 400');
+
+    // 2. /students?semester=abc -> 400
+    const badSemRes = await fetch(`${BASE_URL}/students?semester=abc`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(badSemRes.status, 400, 'Invalid semester should return 400');
+
+    // 3. /students?search[$ne]=x -> 400
+    const badSearchRes = await fetch(`${BASE_URL}/students?search[$ne]=x`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(badSearchRes.status, 400, 'Object search param should return 400');
+
+    // 4. /fees?studentId=notanid -> 400
+    const badFeeStudentRes = await fetch(`${BASE_URL}/fees?studentId=notanid`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(badFeeStudentRes.status, 400, 'Invalid studentId query should return 400');
+
+    // 5. POST /auth/login with object as email -> 400
+    const badLoginRes = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: { $gt: '' }, password: 'password123' }),
+    });
+    assert.equal(badLoginRes.status, 400, 'Non-string email in login must return 400');
+
+    // 6. GET /students/roster by Accountant -> 403 Forbidden
+    const accountantRosterRes = await fetch(`${BASE_URL}/students/roster`, {
+      headers: { Authorization: `Bearer ${accountantToken}` },
+    });
+    assert.equal(accountantRosterRes.status, 403, 'Accountants must not be authorized on /roster');
+  });
+
   after(async () => {
     if (spawnedServer) {
       console.log('[Test Teardown] Stopping test backend server process...');

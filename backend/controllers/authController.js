@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import StudentProfile from '../models/StudentProfile.js';
 import FacultyProfile from '../models/FacultyProfile.js';
@@ -29,7 +30,9 @@ export const login = async (req, res) => {
   try {
     const rawEmail = req.body.email;
     const { password } = req.body;
-    if (!rawEmail || !password) return res.status(400).json({ success: false, message: 'Please provide email and password' });
+    if (!rawEmail || !password || typeof rawEmail !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ success: false, message: 'Please provide email and password as valid text strings' });
+    }
 
     const email = rawEmail.trim().toLowerCase();
     const user = await User.findOne({ email }).select('+password');
@@ -156,8 +159,8 @@ export const createUser = async (req, res) => {
 export const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ success: false, message: 'Please provide current and new password' });
+    if (!currentPassword || !newPassword || typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+      return res.status(400).json({ success: false, message: 'Please provide current and new password as strings' });
     }
 
     const user = await User.findById(req.user._id).select('+password');
@@ -203,8 +206,8 @@ export const changePassword = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   try {
     const rawEmail = req.body.email;
-    if (!rawEmail) {
-      return res.status(400).json({ success: false, message: 'Please provide your registered institutional email' });
+    if (!rawEmail || typeof rawEmail !== 'string') {
+      return res.status(400).json({ success: false, message: 'Please provide your registered institutional email as a string' });
     }
 
     const email = rawEmail.trim().toLowerCase();
@@ -251,8 +254,14 @@ export const forgotPassword = async (req, res) => {
 export const adminResetPassword = async (req, res) => {
   try {
     const { userId, email, newPassword } = req.body;
-    if ((!userId && !email) || !newPassword) {
+    if ((!userId && !email) || !newPassword || typeof newPassword !== 'string') {
       return res.status(400).json({ success: false, message: 'Please provide user ID/email and new password' });
+    }
+    if (email && typeof email !== 'string') {
+      return res.status(400).json({ success: false, message: 'Email must be a string' });
+    }
+    if (userId && !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid userId format' });
     }
 
     if (newPassword.length < 6) {
@@ -285,6 +294,9 @@ export const adminResetPassword = async (req, res) => {
       message: `Password for ${user.name} (${user.email}) has been reset successfully. Existing sessions revoked.`,
     });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid user ID format' });
+    }
     res.status(500).json({ success: false, message: 'Failed to reset user password' });
   }
 };
@@ -296,10 +308,10 @@ export const resetPassword = async (req, res) => {
   try {
     const { token, newPassword } = req.body;
 
-    if (!token || !newPassword) {
+    if (!token || !newPassword || typeof token !== 'string' || typeof newPassword !== 'string') {
       return res.status(400).json({
         success: false,
-        message: 'Please provide the password reset token and your new password',
+        message: 'Please provide the password reset token and your new password as valid text strings',
       });
     }
 

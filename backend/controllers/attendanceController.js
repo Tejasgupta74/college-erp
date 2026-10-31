@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Attendance from '../models/Attendance.js';
 import Course from '../models/Course.js';
 import StudentProfile from '../models/StudentProfile.js';
@@ -42,10 +43,16 @@ export const markAttendance = async (req, res) => {
       sessionType = 'Lecture',
       topicCovered = '',
       records,
+      attendanceId,
+      _id,
     } = req.body;
 
     if (!courseId || !departmentId || !Array.isArray(records) || records.length === 0) {
       return res.status(400).json({ success: false, message: 'Please provide course, department, and student records' });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(courseId) || !mongoose.Types.ObjectId.isValid(departmentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid course or department identifier' });
     }
 
     const course = await Course.findById(courseId);
@@ -62,9 +69,15 @@ export const markAttendance = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid attendance date' });
     }
 
+    // Reject future attendance dates
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (dateStr > todayStr) {
+      return res.status(400).json({ success: false, message: 'Attendance cannot be marked for future dates' });
+    }
+
     const studentIds = records.map((record) => record?.student?.toString());
-    if (studentIds.some((id) => !id) || new Set(studentIds).size !== studentIds.length) {
-      return res.status(400).json({ success: false, message: 'Attendance records must contain unique student IDs' });
+    if (studentIds.some((id) => !id || !mongoose.Types.ObjectId.isValid(id)) || new Set(studentIds).size !== studentIds.length) {
+      return res.status(400).json({ success: false, message: 'Attendance records must contain valid, unique student IDs' });
     }
     const allowedStatuses = new Set(['Present', 'Absent', 'Late', 'Excused']);
     if (records.some((record) => !allowedStatuses.has(record.status || 'Present'))) {
@@ -79,26 +92,54 @@ export const markAttendance = async (req, res) => {
 
     const slotNum = Math.max(1, parseInt(sessionSlot, 10) || 1);
     const { sessionDate, startOfDay, endOfDay } = getDayRange(date);
+    const trimmedTopic = typeof topicCovered === 'string' ? topicCovered.trim() : '';
 
-    let attendance = await Attendance.findOne({
-      course: courseId,
-      section,
-      sessionSlot: slotNum,
-      $or: [
-        { dateString: dateStr },
-        { date: { $gte: startOfDay, $lte: endOfDay } },
-      ],
-    });
+    let attendance = null;
+    const targetId = attendanceId || _id;
+
+    if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
+      attendance = await Attendance.findById(targetId);
+    } else if (trimmedTopic) {
+      // If a topic is supplied, match an existing session with the exact same topic on that day
+      attendance = await Attendance.findOne({
+        course: courseId,
+        section,
+        topicCovered: trimmedTopic,
+        $or: [
+          { dateString: dateStr },
+          { date: { $gte: startOfDay, $lte: endOfDay } },
+        ],
+      });
+    }
 
     if (attendance) {
+      // Update existing matched session
       attendance.records = records;
-      if (topicCovered) attendance.topicCovered = topicCovered;
+      if (trimmedTopic) attendance.topicCovered = trimmedTopic;
       if (sessionType) attendance.sessionType = sessionType;
       attendance.sessionSlot = slotNum;
       attendance.dateString = dateStr;
       attendance.faculty = req.user._id;
       await attendance.save();
     } else {
+      // Create new session: calculate slot so it never collides with existing sessions on that day
+      const existingSessions = await Attendance.find({
+        course: courseId,
+        section,
+        $or: [
+          { dateString: dateStr },
+          { date: { $gte: startOfDay, $lte: endOfDay } },
+        ],
+      }).sort({ sessionSlot: -1 });
+
+      let calculatedSlot = slotNum;
+      if (existingSessions.length > 0) {
+        const highestSlot = Math.max(...existingSessions.map((s) => s.sessionSlot || 1));
+        if (existingSessions.some((s) => s.sessionSlot === calculatedSlot)) {
+          calculatedSlot = highestSlot + 1;
+        }
+      }
+
       attendance = await Attendance.create({
         course: courseId,
         department: departmentId,
@@ -107,9 +148,9 @@ export const markAttendance = async (req, res) => {
         dateString: dateStr,
         semester,
         section,
-        sessionSlot: slotNum,
+        sessionSlot: calculatedSlot,
         sessionType,
-        topicCovered,
+        topicCovered: trimmedTopic,
         records,
       });
     }
@@ -120,7 +161,7 @@ export const markAttendance = async (req, res) => {
       resource: 'Attendance',
       resourceId: attendance._id,
       ip: req.ip,
-      details: { courseId, section, sessionSlot: slotNum, sessionType, totalStudents: records.length },
+      details: { courseId, section, sessionSlot: attendance.sessionSlot, sessionType, totalStudents: records.length },
     });
 
     const populated = await Attendance.findById(attendance._id)
@@ -129,6 +170,12 @@ export const markAttendance = async (req, res) => {
 
     res.status(201).json({ success: true, message: 'Attendance saved successfully', data: populated });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid identifier format in attendance request' });
+    }
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
@@ -143,10 +190,25 @@ export const getAttendance = async (req, res) => {
   try {
     const { courseId, date, semester, section, sessionSlot } = req.query;
     const query = {};
-    if (courseId) query.course = courseId;
-    if (semester) query.semester = Number(semester);
+    if (courseId) {
+      if (!mongoose.Types.ObjectId.isValid(courseId)) {
+        return res.status(400).json({ success: false, message: 'Invalid courseId parameter' });
+      }
+      query.course = courseId;
+    }
+    if (semester) {
+      const semNum = Number(semester);
+      if (!Number.isInteger(semNum) || semNum < 1 || semNum > 12) {
+        return res.status(400).json({ success: false, message: 'Invalid semester parameter' });
+      }
+      query.semester = semNum;
+    }
     if (section) query.section = section;
-    if (sessionSlot) query.sessionSlot = Number(sessionSlot);
+    if (sessionSlot) {
+      const slot = Number(sessionSlot);
+      if (isNaN(slot)) return res.status(400).json({ success: false, message: 'Invalid sessionSlot parameter' });
+      query.sessionSlot = slot;
+    }
     if (date) {
       const dateStr = parseDateString(date);
       if (!dateStr) return res.status(400).json({ success: false, message: 'Invalid attendance date' });
@@ -169,6 +231,9 @@ export const getAttendance = async (req, res) => {
 
     res.json({ success: true, count: records.length, data: records });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid identifier parameter' });
+    }
     res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
@@ -183,6 +248,9 @@ export const getStudentAttendanceSummary = async (req, res) => {
   try {
     const paramId = req.params.studentId;
     const studentUserId = (!paramId || paramId === 'me') ? req.user._id.toString() : paramId.toString();
+    if (!mongoose.Types.ObjectId.isValid(studentUserId)) {
+      return res.status(400).json({ success: false, message: 'Invalid student ID parameter' });
+    }
     if (req.user.role === 'student' && studentUserId !== req.user._id.toString()) {
       return res.status(403).json({ success: false, message: 'You can only view your own attendance' });
     }
@@ -244,6 +312,9 @@ export const getStudentAttendanceSummary = async (req, res) => {
       },
     });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid identifier parameter' });
+    }
     res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,

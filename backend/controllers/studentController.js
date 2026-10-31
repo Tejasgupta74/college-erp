@@ -12,6 +12,20 @@ const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export const getStudents = async (req, res) => {
   try {
     const { department, semester, section, search, page = 1, limit = 20, all } = req.query;
+
+    if (department && !mongoose.Types.ObjectId.isValid(department)) {
+      return res.status(400).json({ success: false, message: 'Invalid department ID format' });
+    }
+    if (semester !== undefined) {
+      const semNum = Number(semester);
+      if (!Number.isInteger(semNum) || semNum < 1 || semNum > 12) {
+        return res.status(400).json({ success: false, message: 'Semester must be an integer between 1 and 12' });
+      }
+    }
+    if (search !== undefined && typeof search !== 'string') {
+      return res.status(400).json({ success: false, message: 'Search parameter must be a string' });
+    }
+
     const query = {};
     if (department) query.department = department;
     if (semester) query.semester = Number(semester);
@@ -93,6 +107,9 @@ export const getStudents = async (req, res) => {
       data: profiles,
     });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: `Invalid ID format for ${error.path || 'field'}` });
+    }
     res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
@@ -102,18 +119,33 @@ export const getStudents = async (req, res) => {
 
 // @desc    Get complete course & cohort roster for attendance and examinations (unpaginated)
 // @route   GET /api/students/roster
-// @access  Private (Admin, Faculty, Accountant)
+// @access  Private (Admin, Faculty)
 export const getStudentRoster = async (req, res) => {
   try {
-    const { department, semester, section, courseId } = req.query;
+    const { department, semester, section, courseId, limit } = req.query;
+
+    if (courseId && !mongoose.Types.ObjectId.isValid(courseId)) {
+      return res.status(400).json({ success: false, message: 'Invalid courseId format' });
+    }
+    if (department && !mongoose.Types.ObjectId.isValid(department)) {
+      return res.status(400).json({ success: false, message: 'Invalid department ID format' });
+    }
+    if (semester !== undefined) {
+      const semNum = Number(semester);
+      if (!Number.isInteger(semNum) || semNum < 1 || semNum > 12) {
+        return res.status(400).json({ success: false, message: 'Semester must be an integer between 1 and 12' });
+      }
+    }
+
     const query = {};
 
     if (courseId) {
       const course = await Course.findById(courseId);
-      if (course) {
-        query.department = course.department;
-        query.semester = course.semester;
+      if (!course) {
+        return res.status(404).json({ success: false, message: 'Course not found' });
       }
+      query.department = course.department;
+      query.semester = course.semester;
     }
 
     if (department) query.department = department;
@@ -139,6 +171,8 @@ export const getStudentRoster = async (req, res) => {
       }
     }
 
+    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 100), 100);
+
     const profiles = await StudentProfile.find(query)
       .populate({
         path: 'user',
@@ -147,6 +181,7 @@ export const getStudentRoster = async (req, res) => {
       })
       .populate('department', 'name code')
       .sort({ rollNo: 1, enrollmentNo: 1 })
+      .limit(limitNum)
       .lean();
 
     const activeRoster = profiles.filter((p) => p.user);
@@ -157,6 +192,9 @@ export const getStudentRoster = async (req, res) => {
       data: activeRoster,
     });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: `Invalid ID format for ${error.path || 'field'}` });
+    }
     res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,

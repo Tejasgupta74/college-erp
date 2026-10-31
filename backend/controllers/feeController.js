@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import Fee from '../models/Fee.js';
+import User from '../models/User.js';
 import logger from '../config/logger.js';
 import { recordAudit } from '../utils/audit.js';
 
@@ -20,11 +21,19 @@ export const getFees = async (req, res) => {
     if (req.user.role === 'student') {
       query.student = req.user._id;
     } else if (studentId) {
+      if (!mongoose.Types.ObjectId.isValid(studentId)) {
+        return res.status(400).json({ success: false, message: 'Invalid student ID parameter format' });
+      }
       query.student = studentId;
     }
 
     if (status) query.status = status;
-    if (departmentId) query.department = departmentId;
+    if (departmentId) {
+      if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+        return res.status(400).json({ success: false, message: 'Invalid department ID parameter format' });
+      }
+      query.department = departmentId;
+    }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
@@ -49,6 +58,9 @@ export const getFees = async (req, res) => {
       data: fees,
     });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid query identifier format' });
+    }
     res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
@@ -62,13 +74,41 @@ export const getFees = async (req, res) => {
 export const createFeeInvoice = async (req, res) => {
   try {
     const { studentId, departmentId, title, semester, academicYear, totalAmount, dueDate } = req.body;
+
+    const parsedAmount = Number(totalAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invoice amount must be a positive number greater than zero',
+      });
+    }
+
+    if (!studentId || !mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid or missing student ID' });
+    }
+
+    if (!departmentId || !mongoose.Types.ObjectId.isValid(departmentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid or missing department ID' });
+    }
+
+    const studentUser = await User.findById(studentId);
+    if (!studentUser) {
+      return res.status(404).json({ success: false, message: 'Student user not found' });
+    }
+    if (studentUser.role !== 'student') {
+      return res.status(400).json({
+        success: false,
+        message: 'Fee invoices can only be billed to student accounts',
+      });
+    }
+
     const invoice = await Fee.create({
       student: studentId,
       department: departmentId,
-      title,
-      semester,
-      academicYear,
-      totalAmount,
+      title: title || 'Tuition & Academic Fees',
+      semester: Number(semester) || 1,
+      academicYear: academicYear || '',
+      totalAmount: parsedAmount,
       dueDate,
       status: 'Pending',
       paidAmount: 0,
@@ -81,7 +121,7 @@ export const createFeeInvoice = async (req, res) => {
       resource: 'Fee',
       resourceId: invoice._id,
       ip: req.ip,
-      details: { studentId, totalAmount, title },
+      details: { studentId, totalAmount: parsedAmount, title },
     });
 
     const populated = await Fee.findById(invoice._id)
@@ -90,6 +130,9 @@ export const createFeeInvoice = async (req, res) => {
 
     res.status(201).json({ success: true, data: populated });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid identifier format in invoice creation' });
+    }
     res.status(400).json({ success: false, message: error.message });
   }
 };
@@ -106,9 +149,20 @@ export const recordPayment = async (req, res) => {
       });
     }
 
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid fee invoice ID format' });
+    }
+
     const { amount, method } = req.body;
     const allowedMethods = ['Online', 'Cash', 'Cheque', 'UPI', 'Bank Transfer'];
-    const paymentMethod = allowedMethods.includes(method) ? method : 'Cash';
+    if (method && !allowedMethods.includes(method)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid payment method: '${method}'. Allowed methods: ${allowedMethods.join(', ')}`,
+      });
+    }
+    const paymentMethod = method || 'Cash';
+
     const payAmount = Number(amount);
     if (isNaN(payAmount) || payAmount <= 0) {
       return res.status(400).json({ success: false, message: 'Invalid payment amount' });
@@ -200,6 +254,9 @@ export const recordPayment = async (req, res) => {
       data: populated,
     });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid fee identifier format' });
+    }
     logger.error('Failed to record payment', { error: error.message, stack: error.stack });
     res.status(500).json({
       success: false,

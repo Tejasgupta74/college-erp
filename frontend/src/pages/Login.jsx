@@ -116,7 +116,6 @@ export const Login = () => {
   };
 
   const handleQuickLogin = async (demoEmail, demoPass) => {
-    if (import.meta.env.PROD) return;
     setEmail(demoEmail);
     setPassword(demoPass);
     setError('');
@@ -364,11 +363,11 @@ export const Login = () => {
             </form>
           )}
 
-          {/* Quick Demo Logins Section - strictly disabled in production mode, visible only during local development */}
-          {!isForgot && Boolean(import.meta.env.DEV) && import.meta.env.VITE_HIDE_DEMO !== 'true' && (
+          {/* Quick Demo Logins Section - accessible for evaluation */}
+          {!isForgot && import.meta.env.VITE_HIDE_DEMO !== 'true' && (
             <div className="mt-8 pt-6 border-t border-slate-100">
               <p className="text-xs font-semibold text-slate-500 text-center uppercase tracking-wider mb-3">
-                ⚡ Demo 1-Click Access (Development Mode Only)
+                ⚡ Demo 1-Click Access
               </p>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <button

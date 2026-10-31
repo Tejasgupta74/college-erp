@@ -9,6 +9,14 @@ const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export const getFaculty = async (req, res) => {
   try {
     const { department, search, page = 1, limit = 20 } = req.query;
+
+    if (department && !mongoose.Types.ObjectId.isValid(department)) {
+      return res.status(400).json({ success: false, message: 'Invalid department ID format' });
+    }
+    if (search !== undefined && typeof search !== 'string') {
+      return res.status(400).json({ success: false, message: 'Search parameter must be a string' });
+    }
+
     const query = department ? { department } : {};
 
     if (search && search.trim()) {
@@ -50,6 +58,9 @@ export const getFaculty = async (req, res) => {
       data: profiles,
     });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: `Invalid ID format for ${error.path || 'field'}` });
+    }
     res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,

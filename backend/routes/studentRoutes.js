@@ -12,7 +12,7 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/', authorize('admin', 'faculty', 'accountant'), getStudents);
-router.get('/roster', authorize('admin', 'faculty', 'accountant'), getStudentRoster);
+router.get('/roster', authorize('admin', 'faculty'), getStudentRoster);
 router.route('/:id').get(getStudentById).put(authorize('admin'), updateStudentProfile).delete(authorize('admin'), deleteStudent);
 
 export default router;

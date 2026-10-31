@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Exam from '../models/Exam.js';
 import Course from '../models/Course.js';
 import StudentProfile from '../models/StudentProfile.js';
@@ -19,9 +20,25 @@ export const getExams = async (req, res) => {
   try {
     const { courseId, departmentId, semester, page = 1, limit = 20 } = req.query;
     const query = {};
-    if (courseId) query.course = courseId;
-    if (departmentId) query.department = departmentId;
-    if (semester) query.semester = Number(semester);
+    if (courseId) {
+      if (!mongoose.Types.ObjectId.isValid(courseId)) {
+        return res.status(400).json({ success: false, message: 'Invalid courseId format' });
+      }
+      query.course = courseId;
+    }
+    if (departmentId) {
+      if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+        return res.status(400).json({ success: false, message: 'Invalid departmentId format' });
+      }
+      query.department = departmentId;
+    }
+    if (semester) {
+      const semNum = Number(semester);
+      if (!Number.isInteger(semNum) || semNum < 1 || semNum > 12) {
+        return res.status(400).json({ success: false, message: 'Invalid semester format' });
+      }
+      query.semester = semNum;
+    }
     if (req.user.role === 'faculty') {
       const assignedCourseIds = await Course.find({ faculty: req.user._id }).distinct('_id');
       query.course = { ...(courseId ? { $eq: courseId } : {}), $in: assignedCourseIds };
@@ -51,6 +68,9 @@ export const getExams = async (req, res) => {
       data: exams,
     });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid query identifier format' });
+    }
     res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
@@ -93,6 +113,10 @@ export const createExam = async (req, res) => {
 export const recordMarks = async (req, res) => {
   try {
     const { results } = req.body;
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ success: false, message: 'Invalid exam ID format' });
+    }
+
     const exam = await Exam.findById(req.params.id);
     if (!exam) return res.status(404).json({ success: false, message: 'Exam not found' });
 
@@ -104,13 +128,30 @@ export const recordMarks = async (req, res) => {
       return res.status(403).json({ success: false, message: 'You can only record marks for your assigned courses' });
     }
     const studentIds = results.map((result) => result?.studentId?.toString());
-    if (studentIds.some((id) => !id) || new Set(studentIds).size !== studentIds.length) {
-      return res.status(400).json({ success: false, message: 'Results must contain unique student IDs' });
+    if (studentIds.some((id) => !id || !mongoose.Types.ObjectId.isValid(id)) || new Set(studentIds).size !== studentIds.length) {
+      return res.status(400).json({ success: false, message: 'Results must contain valid, unique student IDs' });
     }
     for (const result of results) {
-      const marks = Number(result.marksObtained);
-      if (!Number.isFinite(marks) || marks < 0 || marks > exam.maxMarks) {
-        return res.status(400).json({ success: false, message: `Marks must be between 0 and ${exam.maxMarks}` });
+      if (
+        result.marksObtained === null ||
+        result.marksObtained === undefined ||
+        (typeof result.marksObtained === 'string' && result.marksObtained.trim() === '')
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: `Marks obtained cannot be blank or null for student ${result.studentId || ''}. Enter a valid numeric mark.`,
+        });
+      }
+
+      const marks = typeof result.marksObtained === 'number'
+        ? result.marksObtained
+        : Number(result.marksObtained);
+
+      if (isNaN(marks) || !Number.isFinite(marks) || marks < 0 || marks > exam.maxMarks) {
+        return res.status(400).json({
+          success: false,
+          message: `Marks for student ${result.studentId} must be a valid number between 0 and ${exam.maxMarks}`,
+        });
       }
     }
     const rosterCount = await StudentProfile.countDocuments({
@@ -120,12 +161,15 @@ export const recordMarks = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Results include students outside this exam cohort' });
     }
 
-    const updatedResults = results.map((r) => ({
-      student: r.studentId,
-      marksObtained: Number(r.marksObtained),
-      grade: calculateGrade(Number(r.marksObtained), exam.maxMarks, exam.passingMarks),
-      remarks: r.remarks || '',
-    }));
+    const updatedResults = results.map((r) => {
+      const numericMarks = typeof r.marksObtained === 'number' ? r.marksObtained : Number(r.marksObtained);
+      return {
+        student: r.studentId,
+        marksObtained: numericMarks,
+        grade: calculateGrade(numericMarks, exam.maxMarks, exam.passingMarks),
+        remarks: r.remarks || '',
+      };
+    });
     const byStudent = new Map(exam.results.map((result) => [result.student.toString(), result]));
     updatedResults.forEach((result) => byStudent.set(result.student.toString(), result));
     exam.results = [...byStudent.values()];
@@ -139,6 +183,9 @@ export const recordMarks = async (req, res) => {
 
     res.json({ success: true, message: 'Marks recorded successfully', data: updated });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid identifier format' });
+    }
     res.status(500).json({
       success: false,
       message: process.env.NODE_ENV === 'production' ? 'An unexpected server error occurred' : error.message,
@@ -153,6 +200,10 @@ export const getStudentReportCard = async (req, res) => {
       studentId = req.user._id.toString();
     } else {
       studentId = studentId.toString();
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({ success: false, message: 'Invalid student ID parameter format' });
     }
 
     if (req.user.role === 'student' && studentId !== req.user._id.toString()) {
@@ -184,7 +235,7 @@ export const getStudentReportCard = async (req, res) => {
 };
 
 const makeReportCard = (exams, studentId) => exams.map((exam) => {
-      const r = exam.results.find((result) => result.student.toString() === studentId);
+      const r = exam.results.find((result) => (result.student?._id || result.student)?.toString() === studentId);
       const marksObtained = r ? r.marksObtained : 0;
       const percentage = r && exam.maxMarks > 0 ? ((marksObtained / exam.maxMarks) * 100).toFixed(1) : '0.0';
 
